@@ -48,7 +48,7 @@ Not included in the MVP:
 - [x] Tauri command boundary
 - [x] SQLite cache foundation
 - [x] QQ IMAP connection test
-- [ ] QQ Mail IMAP sync
+- [x] QQ Mail read-only IMAP sync to SQLite
 - [ ] Windows installer
 
 ## Architecture
@@ -72,7 +72,10 @@ The app seeds one learning QQ account locally so the UI already reads from the s
 ```text
 list_accounts()
 list_messages(account_id, folder)
+sync_qq_inbox(email, authorization_code, limit)
 ```
+
+The first real sync command connects to QQ Mail with `EXAMINE INBOX` and `BODY.PEEK`, saves the latest messages into SQLite, then the React UI reloads from the local cache. The QQ authorization code is used only for that sync request.
 
 The `accounts` table stores provider metadata such as `qq`, `fudan`, or `gmail`, plus the future IMAP host and auth type. Secrets still do not belong in SQLite.
 
@@ -107,12 +110,13 @@ Email authorization codes should not be stored as plaintext in SQLite. A later m
 
 The backend has a placeholder credential service boundary so future QQ authorization codes and Gmail OAuth tokens can be stored outside the mail cache.
 
-The current QQ IMAP test uses the authorization code for one connection attempt only. It does not save the code to SQLite.
+The current QQ IMAP test and sync actions use the authorization code for one request only. They do not save the code to SQLite.
 
 ## Learning Log
 
 - [Week 01: React UI and Tauri basics](docs/learning-log/week-01.md)
 - [Week 02: SQLite local cache](docs/learning-log/week-02.md)
+- [Week 03: QQ IMAP sync](docs/learning-log/week-03.md)
 
 ## Roadmap
 

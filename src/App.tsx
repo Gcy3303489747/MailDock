@@ -83,6 +83,10 @@ export default function App() {
           setSelectedAccountId(accountId);
           void refreshMessages(accountId);
         }}
+        onSyncComplete={(accountId) => {
+          setSelectedAccountId(accountId);
+          void refreshMessages(accountId);
+        }}
       />
       <section className="mail-workspace" aria-label="MailDock inbox">
         <Toolbar

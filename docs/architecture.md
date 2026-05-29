@@ -37,17 +37,17 @@ User clicks refresh
   -> Rust returns cached messages for that account and folder
 ```
 
-The later QQ Mail sync flow will be:
+The QQ Mail sync flow is now:
 
 ```text
 User clicks sync
-  -> React calls sync_inbox command
-  -> Rust loads account configuration
-  -> Rust reads authorization code from credential storage
+  -> React calls sync_qq_inbox(email, authorization_code, limit)
   -> Rust connects to QQ Mail with read-only IMAP
   -> Rust stores message data in SQLite
   -> React reloads messages through list_messages command
 ```
+
+For the learning MVP, the authorization code is typed into the UI and used only for the current request. Future credential storage will move that secret behind the `security` module boundary.
 
 ## Read-Only Mail Rule
 
@@ -77,13 +77,14 @@ Authorization codes and OAuth tokens should be referenced through the credential
 list_accounts() -> MailAccount[]
 list_messages(account_id, folder) -> MailMessage[]
 test_qq_imap_connection(input) -> ImapConnectionReport
+sync_qq_inbox(input) -> QqInboxSyncReport
 ```
 
 The browser-only development fallback still uses frontend mock data, but the Tauri desktop path reads through Rust and SQLite.
 
 ## QQ IMAP Connection Test
 
-The current provider command only verifies that QQ Mail IMAP login works:
+The provider commands cover both connection testing and read-only syncing:
 
 ```text
 React form
@@ -94,4 +95,15 @@ React form
   -> Rust returns mailbox counts
 ```
 
-The authorization code is not stored. Real sync and credential storage are separate later milestones.
+```text
+React form
+  -> sync_qq_inbox(email, authorization_code, limit)
+  -> Rust connects to imap.qq.com:993 over TLS
+  -> Rust logs in with the QQ Mail authorization code
+  -> Rust opens INBOX with EXAMINE, which is read-only
+  -> Rust fetches recent messages with BODY.PEEK
+  -> Rust upserts account metadata and cached messages into SQLite
+  -> React reloads accounts and messages from SQLite
+```
+
+The authorization code is not stored. The next security milestone is replacing the temporary typed-each-time flow with Windows credential storage.

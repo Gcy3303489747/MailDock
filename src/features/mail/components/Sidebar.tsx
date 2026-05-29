@@ -5,9 +5,15 @@ interface SidebarProps {
   accounts: MailAccount[];
   selectedAccountId: number | null;
   onSelectAccount: (accountId: number) => void;
+  onSyncComplete: (accountId: number) => void;
 }
 
-export function Sidebar({ accounts, selectedAccountId, onSelectAccount }: SidebarProps) {
+export function Sidebar({
+  accounts,
+  selectedAccountId,
+  onSelectAccount,
+  onSyncComplete,
+}: SidebarProps) {
   return (
     <aside className="sidebar" aria-label="Mail accounts">
       <div>
@@ -43,7 +49,7 @@ export function Sidebar({ accounts, selectedAccountId, onSelectAccount }: Sideba
         <span>Mock UI, TypeScript types, and Tauri command basics.</span>
       </div>
 
-      <QqConnectionPanel />
+      <QqConnectionPanel onSyncComplete={onSyncComplete} />
     </aside>
   );
 }

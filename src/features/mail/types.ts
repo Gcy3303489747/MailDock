@@ -47,3 +47,16 @@ export interface ImapConnectionReport {
   recent: number;
   unseen: number | null;
 }
+
+export interface QqInboxSyncInput extends QqImapConnectionInput {
+  limit?: number;
+}
+
+export interface QqInboxSyncReport {
+  accountId: number;
+  address: string;
+  folder: MailFolder;
+  fetched: number;
+  stored: number;
+  totalInboxMessages: number;
+}

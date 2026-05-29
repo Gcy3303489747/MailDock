@@ -5,6 +5,8 @@ import type {
   MailAccount,
   MailFolder,
   MailMessage,
+  QqInboxSyncInput,
+  QqInboxSyncReport,
   QqImapConnectionInput,
 } from "./types";
 
@@ -33,4 +35,8 @@ export async function testQqImapConnection(
   input: QqImapConnectionInput,
 ): Promise<ImapConnectionReport> {
   return await invoke<ImapConnectionReport>("test_qq_imap_connection", { input });
+}
+
+export async function syncQqInbox(input: QqInboxSyncInput): Promise<QqInboxSyncReport> {
+  return await invoke<QqInboxSyncReport>("sync_qq_inbox", { input });
 }

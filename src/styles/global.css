@@ -157,6 +157,18 @@ button {
   width: 100%;
 }
 
+.connection-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.connection-actions .primary-button,
+.connection-actions .secondary-button {
+  min-width: 0;
+  padding: 0 10px;
+}
+
 .connection-result,
 .connection-error {
   margin: 0;

@@ -1,23 +1,42 @@
 import { FormEvent, useState } from "react";
-import { testQqImapConnection } from "../mailApi";
-import type { ImapConnectionReport } from "../types";
+import { syncQqInbox, testQqImapConnection } from "../mailApi";
+import type { ImapConnectionReport, QqInboxSyncReport } from "../types";
 
-export function QqConnectionPanel() {
+interface QqConnectionPanelProps {
+  onSyncComplete: (accountId: number) => void;
+}
+
+export function QqConnectionPanel({ onSyncComplete }: QqConnectionPanelProps) {
   const [email, setEmail] = useState("");
   const [authorizationCode, setAuthorizationCode] = useState("");
-  const [isTesting, setIsTesting] = useState(false);
+  const [isBusy, setIsBusy] = useState(false);
+  const [action, setAction] = useState<"test" | "sync">("test");
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<ImapConnectionReport | null>(null);
+  const [syncReport, setSyncReport] = useState<QqInboxSyncReport | null>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setIsTesting(true);
+    await runQqAction("test");
+  }
+
+  async function runQqAction(nextAction: "test" | "sync") {
+    setAction(nextAction);
+    setIsBusy(true);
     setError(null);
     setReport(null);
+    setSyncReport(null);
 
     try {
-      const nextReport = await testQqImapConnection({ email, authorizationCode });
-      setReport(nextReport);
+      if (nextAction === "sync") {
+        const nextSyncReport = await syncQqInbox({ email, authorizationCode, limit: 50 });
+        setSyncReport(nextSyncReport);
+        onSyncComplete(nextSyncReport.accountId);
+      } else {
+        const nextReport = await testQqImapConnection({ email, authorizationCode });
+        setReport(nextReport);
+      }
+
       setAuthorizationCode("");
     } catch (unknownError) {
       const message =
@@ -28,15 +47,15 @@ export function QqConnectionPanel() {
             : "QQ IMAP connection test failed.";
       setError(message);
     } finally {
-      setIsTesting(false);
+      setIsBusy(false);
     }
   }
 
   return (
     <form className="connection-panel" onSubmit={handleSubmit}>
       <div>
-        <strong>QQ IMAP test</strong>
-        <span>Authorization code is used once and not saved.</span>
+        <strong>QQ IMAP</strong>
+        <span>Authorization code is used for this action only.</span>
       </div>
 
       <label>
@@ -61,13 +80,33 @@ export function QqConnectionPanel() {
         />
       </label>
 
-      <button className="secondary-button" disabled={isTesting} type="submit">
-        {isTesting ? "Testing" : "Test connection"}
-      </button>
+      <div className="connection-actions">
+        <button
+          className="secondary-button"
+          disabled={isBusy}
+          onClick={() => void runQqAction("test")}
+          type="button"
+        >
+          {isBusy && action === "test" ? "Testing" : "Test"}
+        </button>
+        <button
+          className="primary-button"
+          disabled={isBusy}
+          onClick={() => void runQqAction("sync")}
+          type="button"
+        >
+          {isBusy && action === "sync" ? "Syncing" : "Sync inbox"}
+        </button>
+      </div>
 
       {report && (
         <p className="connection-result">
           Connected to {report.host}:{report.port}. INBOX has {report.exists} messages.
+        </p>
+      )}
+      {syncReport && (
+        <p className="connection-result">
+          Synced {syncReport.stored} messages from {syncReport.address}.
         </p>
       )}
       {error && <p className="connection-error">{error}</p>}
