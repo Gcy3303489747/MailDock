@@ -1,4 +1,5 @@
 import type { MailAccount } from "../types";
+import { QqConnectionPanel } from "./QqConnectionPanel";
 
 interface SidebarProps {
   accounts: MailAccount[];
@@ -41,6 +42,8 @@ export function Sidebar({ accounts, selectedAccountId, onSelectAccount }: Sideba
         <strong>Week 01</strong>
         <span>Mock UI, TypeScript types, and Tauri command basics.</span>
       </div>
+
+      <QqConnectionPanel />
     </aside>
   );
 }

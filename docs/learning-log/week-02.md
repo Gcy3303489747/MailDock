@@ -44,3 +44,7 @@ The current command flow is:
 ```text
 React -> list_accounts -> choose account -> list_messages(accountId, "INBOX")
 ```
+
+## Next Step
+
+Week 03 starts with a QQ IMAP connection test. The test uses the authorization code once, opens `INBOX` in read-only mode, and does not sync or store real messages yet.

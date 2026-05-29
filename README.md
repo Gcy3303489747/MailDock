@@ -47,6 +47,7 @@ Not included in the MVP:
 - [x] Mock mailbox UI
 - [x] Tauri command boundary
 - [x] SQLite cache foundation
+- [x] QQ IMAP connection test
 - [ ] QQ Mail IMAP sync
 - [ ] Windows installer
 
@@ -105,6 +106,8 @@ MailDock is read-only in the MVP. The future IMAP implementation should use `EXA
 Email authorization codes should not be stored as plaintext in SQLite. A later milestone should store them in the system credential vault.
 
 The backend has a placeholder credential service boundary so future QQ authorization codes and Gmail OAuth tokens can be stored outside the mail cache.
+
+The current QQ IMAP test uses the authorization code for one connection attempt only. It does not save the code to SQLite.
 
 ## Learning Log
 

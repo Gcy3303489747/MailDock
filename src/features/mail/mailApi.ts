@@ -1,6 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { mockAccounts, mockMessages } from "./mockData";
-import type { MailAccount, MailFolder, MailMessage } from "./types";
+import type {
+  ImapConnectionReport,
+  MailAccount,
+  MailFolder,
+  MailMessage,
+  QqImapConnectionInput,
+} from "./types";
 
 export async function loadAccounts(): Promise<MailAccount[]> {
   try {
@@ -21,4 +27,10 @@ export async function loadInboxMessages(
     console.info("Using browser mock messages until the Tauri SQLite backend is available.", error);
     return mockMessages;
   }
+}
+
+export async function testQqImapConnection(
+  input: QqImapConnectionInput,
+): Promise<ImapConnectionReport> {
+  return await invoke<ImapConnectionReport>("test_qq_imap_connection", { input });
 }

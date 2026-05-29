@@ -32,3 +32,18 @@ export interface MailboxSummary {
   folder: MailFolder;
   unreadCount: number;
 }
+
+export interface QqImapConnectionInput {
+  email: string;
+  authorizationCode: string;
+}
+
+export interface ImapConnectionReport {
+  provider: ProviderKind;
+  host: string;
+  port: number;
+  folder: MailFolder;
+  exists: number;
+  recent: number;
+  unseen: number | null;
+}

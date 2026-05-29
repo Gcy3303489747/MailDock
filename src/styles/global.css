@@ -33,8 +33,9 @@ button {
   flex-direction: column;
   gap: 28px;
   padding: 28px;
-  color: #f8fafc;
-  background: #14213d;
+  color: #25313f;
+  background: #ffffff;
+  border-right: 1px solid #d9e1ec;
 }
 
 .brand-label,
@@ -48,7 +49,7 @@ button {
 }
 
 .sidebar .brand-label {
-  color: #a3b7d4;
+  color: #0f766e;
 }
 
 .sidebar h1,
@@ -74,15 +75,17 @@ button {
   width: 100%;
   gap: 12px;
   padding: 12px;
-  color: inherit;
+  color: #25313f;
   text-align: left;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #f8fafc;
+  border: 1px solid #d9e1ec;
   border-radius: 8px;
 }
 
 .account-item-active {
-  background: rgba(255, 255, 255, 0.15);
+  background: #e8f5f3;
+  border-color: #8bc9c0;
+  box-shadow: inset 4px 0 0 #0f766e;
 }
 
 .account-avatar {
@@ -101,7 +104,7 @@ button {
 .empty-account-copy {
   display: block;
   margin-top: 4px;
-  color: #c7d2e2;
+  color: #64748b;
   font-size: 0.84rem;
 }
 
@@ -112,9 +115,60 @@ button {
 .learning-card {
   margin-top: auto;
   padding: 16px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #f8fafc;
+  border: 1px solid #d9e1ec;
   border-radius: 8px;
+}
+
+.connection-panel {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  background: #f8fafc;
+  border: 1px solid #d9e1ec;
+  border-radius: 8px;
+}
+
+.connection-panel span,
+.connection-panel label,
+.connection-result,
+.connection-error {
+  color: #64748b;
+  font-size: 0.84rem;
+}
+
+.connection-panel label {
+  display: grid;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.connection-panel input {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  color: #25313f;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+}
+
+.connection-panel .secondary-button {
+  width: 100%;
+}
+
+.connection-result,
+.connection-error {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.connection-result {
+  color: #0f766e;
+}
+
+.connection-error {
+  color: #b4233a;
 }
 
 .mail-workspace {
