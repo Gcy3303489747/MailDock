@@ -63,6 +63,111 @@ button {
   font-size: 2.1rem;
 }
 
+.sidebar-header {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.sidebar-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.menu-trigger {
+  display: inline-grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  gap: 0;
+  padding: 9px;
+  background: linear-gradient(180deg, #ffffff 0%, #f1f6f8 100%);
+  border: 1px solid #d7e2e7;
+  border-radius: 10px;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 90%) inset,
+    0 10px 22px rgb(15 23 42 / 8%);
+  cursor: pointer;
+}
+
+.menu-trigger span {
+  display: block;
+  width: 16px;
+  height: 2px;
+  background: #25424c;
+  border-radius: 999px;
+}
+
+.menu-trigger:hover,
+.menu-trigger-active {
+  border-color: #8bc9c0;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 90%) inset,
+    0 12px 28px rgb(15 118 110 / 14%);
+}
+
+.menu-trigger:focus-visible {
+  outline: 3px solid rgb(15 118 110 / 22%);
+  outline-offset: 2px;
+}
+
+.sidebar-menu-popover {
+  position: absolute;
+  z-index: 10;
+  top: 48px;
+  left: 0;
+  width: 224px;
+  padding: 8px;
+  background: #ffffff;
+  border: 1px solid #d7e2e7;
+  border-radius: 10px;
+  box-shadow: 0 18px 44px rgb(15 23 42 / 16%);
+}
+
+.sidebar-menu-popover button {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  align-items: center;
+  width: 100%;
+  min-height: 52px;
+  gap: 10px;
+  padding: 8px;
+  color: #25313f;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.sidebar-menu-popover button:hover {
+  background: #eef6f4;
+}
+
+.menu-option-mark {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  color: #0f766e;
+  font-size: 1.2rem;
+  font-weight: 800;
+  background: #d9f3ef;
+  border-radius: 8px;
+}
+
+.sidebar-menu-popover strong,
+.sidebar-menu-popover small {
+  display: block;
+}
+
+.sidebar-menu-popover small {
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
 .account-list {
   display: grid;
   gap: 12px;
@@ -127,6 +232,23 @@ button {
   background: #f8fafc;
   border: 1px solid #d9e1ec;
   border-radius: 8px;
+}
+
+.connection-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.connection-panel-header button {
+  min-height: 28px;
+  padding: 0 8px;
+  color: #52606d;
+  background: transparent;
+  border: 1px solid #d9e1ec;
+  border-radius: 6px;
+  cursor: pointer;
 }
 
 .connection-panel span,

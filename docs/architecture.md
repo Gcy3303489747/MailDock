@@ -80,7 +80,7 @@ test_qq_imap_connection(input) -> ImapConnectionReport
 sync_qq_inbox(input) -> QqInboxSyncReport
 ```
 
-The browser-only development fallback still uses frontend mock data, but the Tauri desktop path reads through Rust and SQLite.
+The browser-only development fallback now starts empty. The Tauri desktop path reads through Rust and SQLite.
 
 ## QQ IMAP Connection Test
 

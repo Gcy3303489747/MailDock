@@ -27,13 +27,13 @@ Move from mock-only messages to a local database cache.
 - `src-tauri/src/db/connection.rs`: database initialization and compatibility migrations
 - `src-tauri/src/db/account_repo.rs`: account queries
 - `src-tauri/src/db/message_repo.rs`: message queries
-- `src-tauri/src/db/seed.rs`: learning seed data
+- `src-tauri/src/db/seed.rs`: legacy learning seed cleanup
 - `src-tauri/src/commands/mail.rs`: Tauri commands exposed to React
 - `src/features/mail/mailApi.ts`: frontend command call
 
 ## What Changed
 
-The UI still looks like a mock inbox, but the data path is now real:
+The UI originally used mock-like seed data, but the data path became real:
 
 ```text
 React -> Tauri command -> Rust -> SQLite -> Rust -> React

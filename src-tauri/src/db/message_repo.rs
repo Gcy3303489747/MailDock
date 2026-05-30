@@ -104,38 +104,47 @@ pub(crate) fn upsert_messages(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::account_repo::list_accounts;
+    use crate::db::account_repo::upsert_qq_account;
     use crate::db::connection::initialize_connection;
-    use crate::db::seed::seed_database;
     use rusqlite::Connection;
 
     #[test]
-    fn lists_seeded_inbox_messages_for_account_and_folder() {
+    fn lists_synced_inbox_messages_for_account_and_folder() {
         let connection = Connection::open_in_memory().expect("open test database");
         initialize_connection(&connection).expect("initialize schema");
-        seed_database(&connection).expect("seed database");
-        let account = list_accounts(&connection)
-            .expect("list accounts")
-            .pop()
-            .expect("seeded account");
+        let account_id =
+            upsert_qq_account(&connection, "student@qq.com").expect("upsert QQ account");
+        upsert_messages(
+            &connection,
+            account_id,
+            "INBOX",
+            &[MailMessage {
+                id: "qq:student@qq.com:1".into(),
+                from: "Teacher <teacher@example.com>".into(),
+                subject: "Real inbox sample".into(),
+                received_at: "2026-05-29T08:00:00+08:00".into(),
+                preview: "Fetched from IMAP in read-only mode.".into(),
+                body: "Fetched from IMAP in read-only mode.".into(),
+                has_attachments: false,
+                is_unread: true,
+            }],
+        )
+        .expect("upsert messages");
 
-        let messages = list_messages(&connection, account.id, "INBOX").expect("list messages");
+        let messages = list_messages(&connection, account_id, "INBOX").expect("list messages");
 
-        assert_eq!(messages.len(), 5);
-        assert_eq!(messages[0].id, "qq-001");
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].id, "qq:student@qq.com:1");
     }
 
     #[test]
     fn does_not_return_messages_for_other_folder() {
         let connection = Connection::open_in_memory().expect("open test database");
         initialize_connection(&connection).expect("initialize schema");
-        seed_database(&connection).expect("seed database");
-        let account = list_accounts(&connection)
-            .expect("list accounts")
-            .pop()
-            .expect("seeded account");
+        let account_id =
+            upsert_qq_account(&connection, "student@qq.com").expect("upsert QQ account");
 
-        let messages = list_messages(&connection, account.id, "Archive").expect("list messages");
+        let messages = list_messages(&connection, account_id, "Archive").expect("list messages");
 
         assert!(messages.is_empty());
     }
@@ -144,14 +153,11 @@ mod tests {
     fn upserts_synced_messages_for_one_account_and_folder() {
         let connection = Connection::open_in_memory().expect("open test database");
         initialize_connection(&connection).expect("initialize schema");
-        seed_database(&connection).expect("seed database");
-        let account = list_accounts(&connection)
-            .expect("list accounts")
-            .pop()
-            .expect("seeded account");
+        let account_id =
+            upsert_qq_account(&connection, "student@qq.com").expect("upsert QQ account");
 
         let synced = vec![MailMessage {
-            id: "qq:learning@qq.com:10".into(),
+            id: "qq:student@qq.com:10".into(),
             from: "Teacher <teacher@example.com>".into(),
             subject: "Real inbox sample".into(),
             received_at: "2026-05-29T08:00:00+08:00".into(),
@@ -162,12 +168,12 @@ mod tests {
         }];
 
         let stored =
-            upsert_messages(&connection, account.id, "INBOX", &synced).expect("upsert messages");
-        let messages = list_messages(&connection, account.id, "INBOX").expect("list messages");
+            upsert_messages(&connection, account_id, "INBOX", &synced).expect("upsert messages");
+        let messages = list_messages(&connection, account_id, "INBOX").expect("list messages");
 
         assert_eq!(stored, 1);
         assert!(messages
             .iter()
-            .any(|message| message.id == "qq:learning@qq.com:10"));
+            .any(|message| message.id == "qq:student@qq.com:10"));
     }
 }

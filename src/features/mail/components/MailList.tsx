@@ -42,7 +42,7 @@ export function MailList({
     return (
       <section className="mail-list state-panel" aria-label="Empty inbox">
         <p className="state-title">No messages yet</p>
-        <p className="state-copy">The SQLite milestone will make this state useful offline.</p>
+        <p className="state-copy">Open the menu, import a QQ mailbox, then sync the inbox.</p>
       </section>
     );
   }

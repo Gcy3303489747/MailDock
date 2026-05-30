@@ -37,6 +37,6 @@ pub fn upsert_messages(
 
 fn initialized_database(app: &AppHandle) -> Result<rusqlite::Connection, String> {
     let connection = connection::open_database(app)?;
-    seed::seed_database(&connection)?;
+    seed::cleanup_legacy_seed_data(&connection)?;
     Ok(connection)
 }

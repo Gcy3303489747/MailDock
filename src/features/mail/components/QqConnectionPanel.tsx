@@ -3,10 +3,11 @@ import { syncQqInbox, testQqImapConnection } from "../mailApi";
 import type { ImapConnectionReport, QqInboxSyncReport } from "../types";
 
 interface QqConnectionPanelProps {
+  onClose: () => void;
   onSyncComplete: (accountId: number) => void;
 }
 
-export function QqConnectionPanel({ onSyncComplete }: QqConnectionPanelProps) {
+export function QqConnectionPanel({ onClose, onSyncComplete }: QqConnectionPanelProps) {
   const [email, setEmail] = useState("");
   const [authorizationCode, setAuthorizationCode] = useState("");
   const [isBusy, setIsBusy] = useState(false);
@@ -54,7 +55,12 @@ export function QqConnectionPanel({ onSyncComplete }: QqConnectionPanelProps) {
   return (
     <form className="connection-panel" onSubmit={handleSubmit}>
       <div>
-        <strong>QQ IMAP</strong>
+        <div className="connection-panel-header">
+          <strong>QQ IMAP</strong>
+          <button aria-label="Close import panel" onClick={onClose} type="button">
+            Close
+          </button>
+        </div>
         <span>Authorization code is used for this action only.</span>
       </div>
 

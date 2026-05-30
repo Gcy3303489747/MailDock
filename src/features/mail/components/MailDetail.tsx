@@ -9,7 +9,7 @@ export function MailDetail({ message }: MailDetailProps) {
     return (
       <article className="mail-detail empty-detail" aria-label="No message selected">
         <p className="state-title">Select a message</p>
-        <p className="state-copy">The first milestone keeps the reader simple and text-first.</p>
+        <p className="state-copy">Synced messages will appear here after you import a mailbox.</p>
       </article>
     );
   }

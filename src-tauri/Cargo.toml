@@ -19,3 +19,4 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 imap = "2.4"
 native-tls = "0.2"
 tauri = { version = "2", features = [] }
+mailparse = "0.16.1"

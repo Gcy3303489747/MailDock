@@ -67,7 +67,7 @@ The current SQLite milestone creates:
 - `messages`
 - `sync_state`
 
-The app seeds one learning QQ account locally so the UI already reads from the same path that will later receive QQ Mail IMAP data. The command boundary is now account-aware:
+The app starts with no configured mailbox. Use the top-left menu to import a QQ mailbox, then the UI reads from the same SQLite cache used by IMAP sync. The command boundary is account-aware:
 
 ```text
 list_accounts()

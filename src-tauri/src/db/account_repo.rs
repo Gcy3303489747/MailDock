@@ -88,23 +88,16 @@ pub(crate) fn upsert_qq_account(connection: &Connection, address: &str) -> Resul
 mod tests {
     use super::*;
     use crate::db::connection::initialize_connection;
-    use crate::db::seed::seed_database;
     use rusqlite::Connection;
 
     #[test]
-    fn lists_seeded_qq_account() {
+    fn lists_no_accounts_before_import() {
         let connection = Connection::open_in_memory().expect("open test database");
         initialize_connection(&connection).expect("initialize schema");
-        seed_database(&connection).expect("seed database");
 
         let accounts = list_accounts(&connection).expect("list accounts");
 
-        assert_eq!(accounts.len(), 1);
-        assert_eq!(accounts[0].provider, ProviderKind::Qq);
-        assert_eq!(accounts[0].auth_type, AuthType::AuthorizationCode);
-        assert_eq!(accounts[0].address, "learning@qq.com");
-        assert_eq!(accounts[0].imap_host, "imap.qq.com");
-        assert_eq!(accounts[0].imap_port, 993);
+        assert!(accounts.is_empty());
     }
 
     #[test]
