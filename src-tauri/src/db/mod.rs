@@ -6,6 +6,11 @@ pub(crate) mod seed;
 use crate::models::{MailAccount, MailMessage};
 use tauri::AppHandle;
 
+pub fn get_account(app: &AppHandle, account_id: i64) -> Result<MailAccount, String> {
+    let connection = initialized_database(app)?;
+    account_repo::get_account(&connection, account_id)
+}
+
 pub fn list_accounts(app: &AppHandle) -> Result<Vec<MailAccount>, String> {
     let connection = initialized_database(app)?;
     account_repo::list_accounts(&connection)

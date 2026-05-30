@@ -1,6 +1,31 @@
 use crate::models::{AuthType, MailAccount, ProviderKind};
 use rusqlite::{params, Connection};
 
+pub(crate) fn get_account(connection: &Connection, account_id: i64) -> Result<MailAccount, String> {
+    let row = connection
+        .query_row(
+            "SELECT id, provider, address, display_name, auth_type, imap_host, imap_port, is_enabled
+             FROM accounts
+             WHERE id = ?1",
+            params![account_id],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, String>(5)?,
+                    row.get::<_, i64>(6)?,
+                    row.get::<_, i64>(7)?,
+                ))
+            },
+        )
+        .map_err(|error| format!("Failed to read account {account_id}: {error}"))?;
+
+    mail_account_from_row(row)
+}
+
 pub(crate) fn list_accounts(connection: &Connection) -> Result<Vec<MailAccount>, String> {
     let mut statement = connection
         .prepare(
@@ -31,22 +56,29 @@ pub(crate) fn list_accounts(connection: &Connection) -> Result<Vec<MailAccount>,
 
     let mut accounts = Vec::new();
     for row in rows {
-        let (id, provider, address, display_name, auth_type, imap_host, imap_port, is_enabled) =
-            row.map_err(|error| format!("Failed to map account row: {error}"))?;
-
-        accounts.push(MailAccount {
-            id,
-            provider: ProviderKind::from_db(provider)?,
-            address,
-            display_name,
-            auth_type: AuthType::from_db(auth_type)?,
-            imap_host,
-            imap_port,
-            is_enabled: is_enabled != 0,
-        });
+        accounts.push(mail_account_from_row(
+            row.map_err(|error| format!("Failed to map account row: {error}"))?,
+        )?);
     }
 
     Ok(accounts)
+}
+
+fn mail_account_from_row(
+    row: (i64, String, String, String, String, String, i64, i64),
+) -> Result<MailAccount, String> {
+    let (id, provider, address, display_name, auth_type, imap_host, imap_port, is_enabled) = row;
+
+    Ok(MailAccount {
+        id,
+        provider: ProviderKind::from_db(provider)?,
+        address,
+        display_name,
+        auth_type: AuthType::from_db(auth_type)?,
+        imap_host,
+        imap_port,
+        is_enabled: is_enabled != 0,
+    })
 }
 
 pub(crate) fn upsert_qq_account(connection: &Connection, address: &str) -> Result<i64, String> {

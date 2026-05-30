@@ -10,6 +10,8 @@ This milestone connects MailDock to real QQ Mail data while keeping the MVP read
 - Fetched recent messages with `BODY.PEEK` so reading from the app does not mark mail as read.
 - Saved fetched message metadata and text preview into SQLite.
 - Reloaded the React UI from SQLite after sync.
+- Saved the QQ authorization code through the system credential store after a successful import.
+- Added saved-credential sync for app startup and the `Sync now` button.
 
 ## Concepts Learned
 
@@ -18,7 +20,8 @@ This milestone connects MailDock to real QQ Mail data while keeping the MVP read
 - `BODY.PEEK` reads message content without changing the remote read state.
 - A Tauri command is the bridge between React and Rust.
 - SQLite is acting as a local cache, not as credential storage.
+- The operating system credential store is a better place for mailbox secrets than SQLite.
 
 ## Security Note
 
-The QQ authorization code is still typed into the app for each test or sync. MailDock does not save it to SQLite. A later milestone should connect the existing `security` module boundary to Windows credential storage.
+The QQ authorization code is not saved to SQLite. MailDock stores it behind the Rust `security` module using the operating system credential store, keyed by provider and account id.

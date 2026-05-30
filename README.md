@@ -2,7 +2,7 @@
 
 MailDock is a learning-driven Windows desktop mail aggregator built with Tauri, React, TypeScript, Rust, and SQLite.
 
-The first version is intentionally small: QQ Mail, read-only inbox, local cache, and manual refresh. The goal is to build something personally useful while learning desktop app development one milestone at a time.
+The first version is intentionally small: QQ Mail, read-only inbox, local cache, saved authorization code, and one-click sync. The goal is to build something personally useful while learning desktop app development one milestone at a time.
 
 ## Why I Built This
 
@@ -21,7 +21,8 @@ I am building MailDock as a long-term personal project to learn:
 - QQ Mail inbox only
 - Read-only IMAP sync
 - Local SQLite cache
-- Manual refresh
+- Saved QQ authorization code in the system credential store
+- One-click sync
 - Windows desktop app
 
 Not included in the MVP:
@@ -49,6 +50,7 @@ Not included in the MVP:
 - [x] SQLite cache foundation
 - [x] QQ IMAP connection test
 - [x] QQ Mail read-only IMAP sync to SQLite
+- [x] Saved QQ authorization code through the system credential store
 - [ ] Windows installer
 
 ## Architecture
@@ -59,7 +61,7 @@ React UI -> Tauri commands -> Rust backend -> SQLite
                                   -> QQ Mail IMAP
 ```
 
-The MVP keeps React focused on interface state. Rust owns the local database, IMAP access, and future credential storage.
+The MVP keeps React focused on interface state. Rust owns the local database, IMAP access, and credential storage.
 
 The current SQLite milestone creates:
 
@@ -73,9 +75,10 @@ The app starts with no configured mailbox. Use the top-left menu to import a QQ 
 list_accounts()
 list_messages(account_id, folder)
 sync_qq_inbox(email, authorization_code, limit)
+sync_saved_qq_inbox(account_id, limit)
 ```
 
-The first real sync command connects to QQ Mail with `EXAMINE INBOX` and `BODY.PEEK`, saves the latest messages into SQLite, then the React UI reloads from the local cache. The QQ authorization code is used only for that sync request.
+The first real sync command connects to QQ Mail with `EXAMINE INBOX` and `BODY.PEEK`, saves the latest messages into SQLite, then the React UI reloads from the local cache. After a successful import, the QQ authorization code is saved through the operating system credential store so later syncs do not require typing it again.
 
 The `accounts` table stores provider metadata such as `qq`, `fudan`, or `gmail`, plus the future IMAP host and auth type. Secrets still do not belong in SQLite.
 
@@ -104,13 +107,11 @@ npm run dev
 
 ## Security Notes
 
-MailDock is read-only in the MVP. The future IMAP implementation should use `EXAMINE INBOX` and `BODY.PEEK` so syncing does not mark remote messages as read.
+MailDock is read-only in the MVP. The IMAP implementation uses `EXAMINE INBOX` and `BODY.PEEK` so syncing does not mark remote messages as read.
 
-Email authorization codes should not be stored as plaintext in SQLite. A later milestone should store them in the system credential vault.
+Email authorization codes are not stored as plaintext in SQLite. QQ authorization codes are saved through the operating system credential store via the Rust `security` module.
 
-The backend has a placeholder credential service boundary so future QQ authorization codes and Gmail OAuth tokens can be stored outside the mail cache.
-
-The current QQ IMAP test and sync actions use the authorization code for one request only. They do not save the code to SQLite.
+Gmail OAuth tokens should use the same credential boundary later.
 
 ## Learning Log
 

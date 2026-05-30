@@ -26,10 +26,10 @@ Responsibilities:
 - connect to mail providers through IMAP
 - store sensitive credentials through the operating system where possible
 
-## Planned Data Flow
+## Cached Read Flow
 
 ```text
-User clicks refresh
+App starts or user selects an account
   -> React calls list_accounts command
   -> React chooses the selected account
   -> React calls list_messages(account_id, folder)
@@ -40,14 +40,24 @@ User clicks refresh
 The QQ Mail sync flow is now:
 
 ```text
-User clicks sync
+User imports QQ mailbox
   -> React calls sync_qq_inbox(email, authorization_code, limit)
   -> Rust connects to QQ Mail with read-only IMAP
+  -> Rust saves the authorization code through the system credential store
   -> Rust stores message data in SQLite
   -> React reloads messages through list_messages command
 ```
 
-For the learning MVP, the authorization code is typed into the UI and used only for the current request. Future credential storage will move that secret behind the `security` module boundary.
+Later syncs use the saved credential:
+
+```text
+App starts or user clicks Sync now
+  -> React calls sync_saved_qq_inbox(account_id, limit)
+  -> Rust loads the QQ authorization code through the security module
+  -> Rust syncs INBOX with read-only IMAP
+  -> Rust updates SQLite cached messages
+  -> React reloads cached messages
+```
 
 ## Read-Only Mail Rule
 
@@ -78,6 +88,7 @@ list_accounts() -> MailAccount[]
 list_messages(account_id, folder) -> MailMessage[]
 test_qq_imap_connection(input) -> ImapConnectionReport
 sync_qq_inbox(input) -> QqInboxSyncReport
+sync_saved_qq_inbox(input) -> QqInboxSyncReport
 ```
 
 The browser-only development fallback now starts empty. The Tauri desktop path reads through Rust and SQLite.
@@ -102,8 +113,9 @@ React form
   -> Rust logs in with the QQ Mail authorization code
   -> Rust opens INBOX with EXAMINE, which is read-only
   -> Rust fetches recent messages with BODY.PEEK
+  -> Rust saves the authorization code in the system credential store
   -> Rust upserts account metadata and cached messages into SQLite
   -> React reloads accounts and messages from SQLite
 ```
 
-The authorization code is not stored. The next security milestone is replacing the temporary typed-each-time flow with Windows credential storage.
+The authorization code is not stored in SQLite. The `security` module stores and reads it through the operating system credential store, keyed by provider and account id.

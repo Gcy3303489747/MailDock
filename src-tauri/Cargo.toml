@@ -22,3 +22,4 @@ tauri = { version = "2", features = [] }
 mailparse = "0.16.1"
 base64 = "0.22.1"
 encoding_rs = "0.8.35"
+keyring = "3"

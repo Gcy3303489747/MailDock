@@ -21,7 +21,7 @@ export function Toolbar({ account, folder, isLoading, messageCount, onRefresh }:
       <div className="toolbar-actions">
         <span className="message-count">{messageCount} messages</span>
         <button className="primary-button" disabled={isLoading} onClick={onRefresh} type="button">
-          {isLoading ? "Refreshing" : "Refresh"}
+          {isLoading ? "Syncing" : "Sync now"}
         </button>
       </div>
     </header>

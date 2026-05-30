@@ -3,8 +3,13 @@ import { MailDetail } from "./features/mail/components/MailDetail";
 import { MailList } from "./features/mail/components/MailList";
 import { Sidebar } from "./features/mail/components/Sidebar";
 import { Toolbar } from "./features/mail/components/Toolbar";
-import { loadAccounts, loadInboxMessages } from "./features/mail/mailApi";
+import { loadAccounts, loadInboxMessages, syncSavedQqInbox } from "./features/mail/mailApi";
 import type { MailAccount, MailFolder, MailMessage } from "./features/mail/types";
+
+interface RefreshOptions {
+  syncSaved?: boolean;
+  quietCredentialError?: boolean;
+}
 
 export default function App() {
   const [accounts, setAccounts] = useState<MailAccount[]>([]);
@@ -25,7 +30,7 @@ export default function App() {
     [accounts, selectedAccountId],
   );
 
-  async function refreshMessages(accountIdOverride?: number) {
+  async function refreshMessages(accountIdOverride?: number, options: RefreshOptions = {}) {
     setIsLoading(true);
     setError(null);
 
@@ -51,6 +56,18 @@ export default function App() {
         return;
       }
 
+      if (options.syncSaved) {
+        try {
+          await syncSavedQqInbox({ accountId: nextAccountId, limit: 50 });
+        } catch (syncError) {
+          if (!options.quietCredentialError) {
+            throw syncError;
+          }
+
+          console.info("Saved credential sync skipped; showing cached inbox instead.", syncError);
+        }
+      }
+
       const nextMessages = await loadInboxMessages(nextAccountId, selectedFolder);
       setMessages(nextMessages);
       setSelectedMessageId((currentId) => {
@@ -71,7 +88,7 @@ export default function App() {
   }
 
   useEffect(() => {
-    void refreshMessages();
+    void refreshMessages(undefined, { syncSaved: true, quietCredentialError: true });
   }, []);
 
   return (
@@ -94,7 +111,7 @@ export default function App() {
           folder={selectedFolder}
           isLoading={isLoading}
           messageCount={messages.length}
-          onRefresh={() => void refreshMessages()}
+          onRefresh={() => void refreshMessages(undefined, { syncSaved: true })}
         />
         <div className="mail-columns">
           <MailList

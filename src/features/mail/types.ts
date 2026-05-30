@@ -52,6 +52,11 @@ export interface QqInboxSyncInput extends QqImapConnectionInput {
   limit?: number;
 }
 
+export interface SavedQqInboxSyncInput {
+  accountId: number;
+  limit?: number;
+}
+
 export interface QqInboxSyncReport {
   accountId: number;
   address: string;

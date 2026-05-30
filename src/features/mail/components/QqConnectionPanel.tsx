@@ -63,7 +63,7 @@ export function QqConnectionPanel({ onClose, onSyncComplete }: QqConnectionPanel
             Close
           </button>
         </div>
-        <span>Import connects once, syncs recent inbox mail, then clears the code.</span>
+        <span>Import saves the code in your system credential store for future sync.</span>
       </div>
 
       <label>
