@@ -1,3 +1,5 @@
+use base64::{engine::general_purpose, Engine as _};
+use encoding_rs::Encoding;
 use mailparse::{addrparse_header, parse_mail, MailAddr, MailHeaderMap, ParsedMail};
 use serde::{Deserialize, Serialize};
 
@@ -153,10 +155,7 @@ fn mail_message_from_raw(
     is_unread: bool,
 ) -> Option<MailMessage> {
     let parsed = parse_mail(raw_message).ok()?;
-    let subject = parsed
-        .headers
-        .get_first_value("Subject")
-        .map(clean_text)
+    let subject = decoded_header(&parsed, "Subject")
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| "(No subject)".into());
     let from = decoded_from(&parsed).unwrap_or_else(|| "(Unknown sender)".into());
@@ -167,7 +166,7 @@ fn mail_message_from_raw(
         .filter(|value| !value.is_empty())
         .unwrap_or(fallback_received_at);
     let body = decoded_text_body(&parsed)
-        .map(clean_text)
+        .map(normalize_display_text)
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| {
             "MailDock could not load a plain text body for this message yet.".into()
@@ -187,6 +186,13 @@ fn mail_message_from_raw(
     })
 }
 
+fn decoded_header(parsed: &ParsedMail<'_>, key: &str) -> Option<String> {
+    let header = parsed.headers.get_first_header(key)?;
+    let raw_value = String::from_utf8_lossy(header.get_value_raw());
+    let decoded = decode_rfc2047_words(&raw_value).unwrap_or_else(|| header.get_value());
+    Some(normalize_display_text(decoded))
+}
+
 fn decoded_from(parsed: &ParsedMail<'_>) -> Option<String> {
     let header = parsed.headers.get_first_header("From")?;
     let parsed_addresses = addrparse_header(header).ok()?;
@@ -195,13 +201,13 @@ fn decoded_from(parsed: &ParsedMail<'_>) -> Option<String> {
     match first {
         MailAddr::Single(info) => Some(match &info.display_name {
             Some(display_name) if !display_name.trim().is_empty() => {
-                format!("{} <{}>", clean_text(display_name), info.addr)
+                format!("{} <{}>", normalize_display_text(display_name), info.addr)
             }
             _ => info.addr.clone(),
         }),
         MailAddr::Group(group) => group.addrs.first().map(|info| match &info.display_name {
             Some(display_name) if !display_name.trim().is_empty() => {
-                format!("{} <{}>", clean_text(display_name), info.addr)
+                format!("{} <{}>", normalize_display_text(display_name), info.addr)
             }
             _ => info.addr.clone(),
         }),
@@ -209,17 +215,27 @@ fn decoded_from(parsed: &ParsedMail<'_>) -> Option<String> {
 }
 
 fn decoded_text_body(parsed: &ParsedMail<'_>) -> Option<String> {
-    parsed
+    for part in parsed
         .parts()
-        .find(|part| part.ctype.mimetype.eq_ignore_ascii_case("text/plain"))
-        .and_then(|part| part.get_body().ok())
-        .or_else(|| {
-            parsed
-                .parts()
-                .find(|part| part.ctype.mimetype.eq_ignore_ascii_case("text/html"))
-                .and_then(|part| part.get_body().ok())
-                .map(|body| strip_html_tags(&body))
-        })
+        .filter(|part| part.ctype.mimetype.eq_ignore_ascii_case("text/plain"))
+    {
+        let body = part.get_body().ok()?;
+        if !looks_like_multipart_preamble(&body) {
+            return Some(body);
+        }
+    }
+
+    for part in parsed
+        .parts()
+        .filter(|part| part.ctype.mimetype.eq_ignore_ascii_case("text/html"))
+    {
+        let body = strip_html_tags(&part.get_body().ok()?);
+        if !looks_like_multipart_preamble(&body) {
+            return Some(body);
+        }
+    }
+
+    None
 }
 
 fn is_attachment_part(part: &ParsedMail<'_>) -> bool {
@@ -251,6 +267,10 @@ fn validate_credentials(email: &str, authorization_code: &str) -> Result<(), Str
     Ok(())
 }
 
+fn normalize_display_text(value: impl AsRef<str>) -> String {
+    repair_utf8_decoded_as_gbk(&clean_text(value))
+}
+
 fn clean_text(value: impl AsRef<str>) -> String {
     value
         .as_ref()
@@ -260,6 +280,110 @@ fn clean_text(value: impl AsRef<str>) -> String {
         .filter(|line| !line.is_empty())
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn decode_rfc2047_words(value: &str) -> Option<String> {
+    let mut output = String::new();
+    let mut remainder = value;
+    let mut decoded_any = false;
+    let mut previous_was_encoded = false;
+
+    while let Some(start) = remainder.find("=?") {
+        let before = &remainder[..start];
+        if !(previous_was_encoded && before.trim().is_empty()) {
+            output.push_str(before);
+        }
+
+        let encoded_remainder = &remainder[start + 2..];
+        let Some(end) = encoded_remainder.find("?=") else {
+            output.push_str(&remainder[start..]);
+            return decoded_any.then_some(output);
+        };
+
+        let encoded_word = &encoded_remainder[..end];
+        if let Some(decoded_word) = decode_rfc2047_word(encoded_word) {
+            output.push_str(&decoded_word);
+            decoded_any = true;
+            previous_was_encoded = true;
+        } else {
+            output.push_str("=?");
+            output.push_str(encoded_word);
+            output.push_str("?=");
+            previous_was_encoded = false;
+        }
+
+        remainder = &encoded_remainder[end + 2..];
+    }
+
+    output.push_str(remainder);
+    decoded_any.then_some(output)
+}
+
+fn decode_rfc2047_word(encoded_word: &str) -> Option<String> {
+    let mut parts = encoded_word.splitn(3, '?');
+    let charset = parts.next()?.trim();
+    let encoding = parts.next()?.trim();
+    let payload = parts.next()?.trim();
+
+    let bytes = match encoding.to_ascii_lowercase().as_str() {
+        "b" => general_purpose::STANDARD.decode(payload).ok()?,
+        "q" => decode_rfc2047_q_payload(payload)?,
+        _ => return None,
+    };
+
+    decode_charset(charset, &bytes)
+}
+
+fn decode_rfc2047_q_payload(payload: &str) -> Option<Vec<u8>> {
+    let bytes = payload.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+
+    while index < bytes.len() {
+        match bytes[index] {
+            b'_' => {
+                decoded.push(b' ');
+                index += 1;
+            }
+            b'=' if index + 2 < bytes.len() => {
+                let hex = std::str::from_utf8(&bytes[index + 1..index + 3]).ok()?;
+                decoded.push(u8::from_str_radix(hex, 16).ok()?);
+                index += 3;
+            }
+            byte => {
+                decoded.push(byte);
+                index += 1;
+            }
+        }
+    }
+
+    Some(decoded)
+}
+
+fn decode_charset(charset: &str, bytes: &[u8]) -> Option<String> {
+    let encoding = Encoding::for_label(charset.as_bytes())?;
+    let (decoded, _, had_errors) = encoding.decode(bytes);
+
+    if had_errors {
+        return None;
+    }
+
+    Some(decoded.into_owned())
+}
+
+fn repair_utf8_decoded_as_gbk(value: &str) -> String {
+    let (encoded, _, had_errors) = encoding_rs::GBK.encode(value);
+    if had_errors {
+        return value.to_owned();
+    }
+
+    String::from_utf8(encoded.into_owned()).unwrap_or_else(|_| value.to_owned())
+}
+
+fn looks_like_multipart_preamble(value: &str) -> bool {
+    let normalized = value.to_ascii_lowercase();
+    normalized.contains("this is a multi-part message in mime format")
+        || normalized.contains("this is a multipart message in mime format")
 }
 
 fn strip_html_tags(value: &str) -> String {
@@ -324,5 +448,52 @@ mod tests {
         assert_eq!(message.from, "邮件服务 <service@qq.com>");
         assert_eq!(message.body, "这是一封QQ邮件");
         assert!(!message.body.contains("=E8"));
+    }
+
+    #[test]
+    fn decodes_folded_lowercase_rfc2047_subject() {
+        let raw_message = concat!(
+            "From: <service@qq.com>\r\n",
+            "Subject: =?utf-8?B?5rWL6K+V?=\r\n",
+            " =?utf-8?B?6YKu5Lu2?=\r\n",
+            "Date: Fri, 29 May 2026 09:30:00 +0800\r\n",
+            "Content-Type: text/plain; charset=utf-8\r\n",
+            "\r\n",
+            "hello"
+        );
+
+        let message = mail_message_from_raw(
+            "student@qq.com",
+            43,
+            raw_message.as_bytes(),
+            "2026-05-29T09:30:00+08:00".into(),
+            true,
+        )
+        .expect("parse message");
+
+        assert_eq!(message.subject, "测试邮件");
+    }
+
+    #[test]
+    fn skips_multipart_preamble_body() {
+        let raw_message = concat!(
+            "From: <service@qq.com>\r\n",
+            "Subject: Multipart\r\n",
+            "Content-Type: text/plain; charset=utf-8\r\n",
+            "\r\n",
+            "This is a multi-part message in MIME format.\r\n",
+            "------=_NextPart_001"
+        );
+
+        let message = mail_message_from_raw(
+            "student@qq.com",
+            44,
+            raw_message.as_bytes(),
+            "2026-05-29T09:30:00+08:00".into(),
+            true,
+        )
+        .expect("parse message");
+
+        assert!(!message.body.contains("multi-part message"));
     }
 }
