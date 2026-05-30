@@ -1,6 +1,6 @@
 use base64::{engine::general_purpose, Engine as _};
 use encoding_rs::Encoding;
-use mailparse::{addrparse_header, parse_mail, MailAddr, MailHeaderMap, ParsedMail};
+use mailparse::{addrparse, addrparse_header, parse_mail, MailAddr, MailHeaderMap, ParsedMail};
 use serde::{Deserialize, Serialize};
 
 use crate::models::MailMessage;
@@ -166,7 +166,7 @@ fn mail_message_from_raw(
         .filter(|value| !value.is_empty())
         .unwrap_or(fallback_received_at);
     let body = decoded_text_body(&parsed)
-        .map(normalize_display_text)
+        .map(normalize_body_text)
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| {
             "MailDock could not load a plain text body for this message yet.".into()
@@ -195,19 +195,34 @@ fn decoded_header(parsed: &ParsedMail<'_>, key: &str) -> Option<String> {
 
 fn decoded_from(parsed: &ParsedMail<'_>) -> Option<String> {
     let header = parsed.headers.get_first_header("From")?;
-    let parsed_addresses = addrparse_header(header).ok()?;
+    let parsed_addresses = match addrparse_header(header) {
+        Ok(addresses) => addresses,
+        Err(_) => decoded_header(parsed, "From").and_then(|decoded| addrparse(&decoded).ok())?,
+    };
     let first = parsed_addresses.first()?;
 
     match first {
         MailAddr::Single(info) => Some(match &info.display_name {
             Some(display_name) if !display_name.trim().is_empty() => {
-                format!("{} <{}>", normalize_display_text(display_name), info.addr)
+                format!(
+                    "{} <{}>",
+                    normalize_display_text(
+                        decode_rfc2047_words(display_name).unwrap_or_else(|| display_name.clone())
+                    ),
+                    info.addr
+                )
             }
             _ => info.addr.clone(),
         }),
         MailAddr::Group(group) => group.addrs.first().map(|info| match &info.display_name {
             Some(display_name) if !display_name.trim().is_empty() => {
-                format!("{} <{}>", normalize_display_text(display_name), info.addr)
+                format!(
+                    "{} <{}>",
+                    normalize_display_text(
+                        decode_rfc2047_words(display_name).unwrap_or_else(|| display_name.clone())
+                    ),
+                    info.addr
+                )
             }
             _ => info.addr.clone(),
         }),
@@ -271,6 +286,34 @@ fn normalize_display_text(value: impl AsRef<str>) -> String {
     repair_utf8_decoded_as_gbk(&clean_text(value))
 }
 
+fn normalize_body_text(value: impl AsRef<str>) -> String {
+    let repaired = repair_utf8_decoded_as_gbk(value.as_ref());
+    let normalized = repaired.replace("\r\n", "\n").replace('\r', "\n");
+    let mut lines = Vec::new();
+    let mut blank_count = 0;
+
+    for line in normalized.lines() {
+        let trimmed_end = line.trim_end();
+
+        if trimmed_end.trim().is_empty() {
+            blank_count += 1;
+            if blank_count <= 2 && !lines.is_empty() {
+                lines.push(String::new());
+            }
+            continue;
+        }
+
+        blank_count = 0;
+        lines.push(trimmed_end.to_owned());
+    }
+
+    while lines.last().is_some_and(|line| line.is_empty()) {
+        lines.pop();
+    }
+
+    lines.join("\n").trim().to_owned()
+}
+
 fn clean_text(value: impl AsRef<str>) -> String {
     value
         .as_ref()
@@ -326,12 +369,34 @@ fn decode_rfc2047_word(encoded_word: &str) -> Option<String> {
     let payload = parts.next()?.trim();
 
     let bytes = match encoding.to_ascii_lowercase().as_str() {
-        "b" => general_purpose::STANDARD.decode(payload).ok()?,
+        "b" => decode_base64_payload(payload)?,
         "q" => decode_rfc2047_q_payload(payload)?,
         _ => return None,
     };
 
     decode_charset(charset, &bytes)
+}
+
+fn decode_base64_payload(payload: &str) -> Option<Vec<u8>> {
+    let cleaned = payload
+        .chars()
+        .filter(|character| !character.is_whitespace())
+        .collect::<String>();
+
+    if cleaned.is_empty() {
+        return Some(Vec::new());
+    }
+
+    general_purpose::STANDARD
+        .decode(&cleaned)
+        .or_else(|_| general_purpose::STANDARD_NO_PAD.decode(&cleaned))
+        .or_else(|_| {
+            let padding = (4 - cleaned.len() % 4) % 4;
+            let mut padded = cleaned.clone();
+            padded.extend(std::iter::repeat('=').take(padding));
+            general_purpose::STANDARD.decode(padded)
+        })
+        .ok()
 }
 
 fn decode_rfc2047_q_payload(payload: &str) -> Option<Vec<u8>> {
@@ -475,6 +540,61 @@ mod tests {
     }
 
     #[test]
+    fn decodes_wrapped_base64_payload_subject() {
+        let raw_message = concat!(
+            "From: <service@qq.com>\r\n",
+            "Subject: =?utf-8?B?5rWL\r\n",
+            " 6K+V6YKu5Lu2?=\r\n",
+            "Date: Fri, 29 May 2026 09:30:00 +0800\r\n",
+            "Content-Type: text/plain; charset=utf-8\r\n",
+            "\r\n",
+            "hello"
+        );
+
+        let message = mail_message_from_raw(
+            "student@qq.com",
+            44,
+            raw_message.as_bytes(),
+            "2026-05-29T09:30:00+08:00".into(),
+            true,
+        )
+        .expect("parse message");
+
+        assert_eq!(message.subject, "测试邮件");
+        assert!(!message.subject.contains("=?"));
+    }
+
+    #[test]
+    fn preserves_body_paragraph_breaks() {
+        let raw_message = concat!(
+            "From: <service@qq.com>\r\n",
+            "Subject: Paragraphs\r\n",
+            "Date: Fri, 29 May 2026 09:30:00 +0800\r\n",
+            "Content-Type: text/plain; charset=utf-8\r\n",
+            "\r\n",
+            "First paragraph\r\n",
+            "\r\n",
+            "> Quoted reply\r\n",
+            "\r\n",
+            "Second paragraph"
+        );
+
+        let message = mail_message_from_raw(
+            "student@qq.com",
+            45,
+            raw_message.as_bytes(),
+            "2026-05-29T09:30:00+08:00".into(),
+            true,
+        )
+        .expect("parse message");
+
+        assert_eq!(
+            message.body,
+            "First paragraph\n\n> Quoted reply\n\nSecond paragraph"
+        );
+    }
+
+    #[test]
     fn skips_multipart_preamble_body() {
         let raw_message = concat!(
             "From: <service@qq.com>\r\n",
@@ -487,7 +607,7 @@ mod tests {
 
         let message = mail_message_from_raw(
             "student@qq.com",
-            44,
+            46,
             raw_message.as_bytes(),
             "2026-05-29T09:30:00+08:00".into(),
             true,
