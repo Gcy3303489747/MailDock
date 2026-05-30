@@ -18,7 +18,7 @@ export function QqConnectionPanel({ onClose, onSyncComplete }: QqConnectionPanel
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await runQqAction("test");
+    await runQqAction("sync");
   }
 
   async function runQqAction(nextAction: "test" | "sync") {
@@ -38,7 +38,9 @@ export function QqConnectionPanel({ onClose, onSyncComplete }: QqConnectionPanel
         setReport(nextReport);
       }
 
-      setAuthorizationCode("");
+      if (nextAction === "sync") {
+        setAuthorizationCode("");
+      }
     } catch (unknownError) {
       const message =
         unknownError instanceof Error
@@ -61,7 +63,7 @@ export function QqConnectionPanel({ onClose, onSyncComplete }: QqConnectionPanel
             Close
           </button>
         </div>
-        <span>Authorization code is used for this action only.</span>
+        <span>Import connects once, syncs recent inbox mail, then clears the code.</span>
       </div>
 
       <label>
@@ -93,15 +95,14 @@ export function QqConnectionPanel({ onClose, onSyncComplete }: QqConnectionPanel
           onClick={() => void runQqAction("test")}
           type="button"
         >
-          {isBusy && action === "test" ? "Testing" : "Test"}
+          {isBusy && action === "test" ? "Testing" : "Test only"}
         </button>
         <button
           className="primary-button"
           disabled={isBusy}
-          onClick={() => void runQqAction("sync")}
-          type="button"
+          type="submit"
         >
-          {isBusy && action === "sync" ? "Syncing" : "Sync inbox"}
+          {isBusy && action === "sync" ? "Importing" : "Import inbox"}
         </button>
       </div>
 
