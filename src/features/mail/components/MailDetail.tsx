@@ -1,3 +1,5 @@
+import { openUrl } from "@tauri-apps/plugin-opener";
+import type { MouseEvent, ReactNode } from "react";
 import type { MailMessage } from "../types";
 
 interface MailDetailProps {
@@ -40,20 +42,94 @@ export function MailDetail({ message }: MailDetailProps) {
           if (block.type === "quote") {
             return (
               <blockquote className="detail-quote" key={`${block.type}-${index}`}>
-                {block.text}
+                {renderTextWithLinks(block.text)}
               </blockquote>
             );
           }
 
           return (
             <p className="detail-paragraph" key={`${block.type}-${index}`}>
-              {block.text}
+              {renderTextWithLinks(block.text)}
             </p>
           );
         })}
       </div>
     </article>
   );
+}
+
+const LINK_PATTERN =
+  /\b((?:https?:\/\/|www\.)[^\s<>"']+|mailto:[^\s<>"']+|[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/gi;
+const TRAILING_LINK_PUNCTUATION = /[),.;:!?，。！？；：）]+$/;
+
+function renderTextWithLinks(text: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  let lastIndex = 0;
+
+  for (const match of text.matchAll(LINK_PATTERN)) {
+    const rawMatch = match[0];
+    const matchIndex = match.index ?? 0;
+    const linkText = rawMatch.replace(TRAILING_LINK_PUNCTUATION, "");
+    const trailingText = rawMatch.slice(linkText.length);
+
+    if (!linkText) {
+      continue;
+    }
+
+    if (matchIndex > lastIndex) {
+      nodes.push(text.slice(lastIndex, matchIndex));
+    }
+
+    const href = hrefForLink(linkText);
+    nodes.push(
+      <a
+        className="detail-link"
+        href={href}
+        key={`${href}-${matchIndex}`}
+        onClick={(event) => void openExternalLink(event, href)}
+        rel="noreferrer"
+        target="_blank"
+        title={`Open ${linkText}`}
+      >
+        {linkText}
+      </a>,
+    );
+
+    if (trailingText) {
+      nodes.push(trailingText);
+    }
+
+    lastIndex = matchIndex + rawMatch.length;
+  }
+
+  if (lastIndex < text.length) {
+    nodes.push(text.slice(lastIndex));
+  }
+
+  return nodes;
+}
+
+function hrefForLink(value: string): string {
+  if (value.startsWith("www.")) {
+    return `https://${value}`;
+  }
+
+  if (/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(value)) {
+    return `mailto:${value}`;
+  }
+
+  return value;
+}
+
+async function openExternalLink(event: MouseEvent<HTMLAnchorElement>, href: string) {
+  event.preventDefault();
+
+  try {
+    await openUrl(href);
+  } catch (error) {
+    console.info("Falling back to browser window.open for external link.", error);
+    window.open(href, "_blank", "noopener,noreferrer");
+  }
 }
 
 function buildBodyBlocks(body: string): BodyBlock[] {

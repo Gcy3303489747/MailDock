@@ -10,6 +10,7 @@ use commands::provider::{sync_qq_inbox, sync_saved_qq_inbox, test_qq_imap_connec
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             list_accounts,
             list_messages,

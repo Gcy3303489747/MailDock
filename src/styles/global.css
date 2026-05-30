@@ -524,6 +524,24 @@ button {
   border: 0;
 }
 
+.detail-link {
+  color: #0f766e;
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.detail-link:hover {
+  color: #0b5f59;
+}
+
+.detail-link:focus-visible {
+  outline: 3px solid rgb(15 118 110 / 22%);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 .state-panel,
 .empty-detail {
   display: grid;
