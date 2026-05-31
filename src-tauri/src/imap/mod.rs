@@ -12,13 +12,6 @@ const MAX_SYNC_LIMIT: u32 = 100;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct QqImapConnectionInput {
-    pub email: String,
-    pub authorization_code: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct QqInboxSyncInput {
     pub email: String,
     pub authorization_code: String,
@@ -42,37 +35,6 @@ pub struct ImapConnectionReport {
 pub struct QqInboxSyncPayload {
     pub report: ImapConnectionReport,
     pub messages: Vec<MailMessage>,
-}
-
-pub fn test_qq_connection(input: QqImapConnectionInput) -> Result<ImapConnectionReport, String> {
-    validate_input(&input)?;
-
-    let tls = native_tls::TlsConnector::builder()
-        .build()
-        .map_err(|error| format!("Failed to create TLS connector: {error}"))?;
-
-    let client = imap::connect((QQ_IMAP_HOST, QQ_IMAP_PORT), QQ_IMAP_HOST, &tls)
-        .map_err(|error| format!("Failed to connect to QQ IMAP: {error}"))?;
-
-    let mut session = client
-        .login(input.email.trim(), input.authorization_code.trim())
-        .map_err(|(error, _client)| format!("QQ IMAP login failed: {error}"))?;
-
-    let mailbox = session
-        .examine("INBOX")
-        .map_err(|error| format!("Failed to open INBOX in read-only mode: {error}"))?;
-
-    let _ = session.logout();
-
-    Ok(ImapConnectionReport {
-        provider: "qq".into(),
-        host: QQ_IMAP_HOST.into(),
-        port: QQ_IMAP_PORT,
-        folder: "INBOX".into(),
-        exists: mailbox.exists,
-        recent: mailbox.recent,
-        unseen: mailbox.unseen,
-    })
 }
 
 pub fn sync_qq_inbox(input: QqInboxSyncInput) -> Result<QqInboxSyncPayload, String> {
@@ -260,10 +222,6 @@ fn is_attachment_part(part: &ParsedMail<'_>) -> bool {
         .unwrap_or_default()
         .to_lowercase();
     disposition.contains("attachment")
-}
-
-fn validate_input(input: &QqImapConnectionInput) -> Result<(), String> {
-    validate_credentials(input.email.trim(), input.authorization_code.trim())
 }
 
 fn validate_credentials(email: &str, authorization_code: &str) -> Result<(), String> {

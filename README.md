@@ -48,7 +48,6 @@ Not included in the MVP:
 - [x] Mock mailbox UI
 - [x] Tauri command boundary
 - [x] SQLite cache foundation
-- [x] QQ IMAP connection test
 - [x] QQ Mail read-only IMAP sync to SQLite
 - [x] Saved QQ authorization code through the system credential store
 - [ ] Windows installer

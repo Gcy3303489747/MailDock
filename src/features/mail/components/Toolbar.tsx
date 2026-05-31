@@ -13,9 +13,9 @@ export function Toolbar({ account, folder, isLoading, messageCount, onRefresh }:
     <header className="toolbar">
       <div>
         <p className="eyebrow">
-          {account ? `${providerLabel(account.provider)} / ${folder}` : `No account / ${folder}`}
+          {account ? `${providerLabel(account.provider)} / ${folder}` : `No mailbox / ${folder}`}
         </p>
-        <h2>Read-only inbox</h2>
+        <h2>Inbox</h2>
         {account && <p className="toolbar-account">{account.address}</p>}
       </div>
       <div className="toolbar-actions">

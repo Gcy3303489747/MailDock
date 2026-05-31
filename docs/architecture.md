@@ -86,25 +86,15 @@ Authorization codes and OAuth tokens should be referenced through the credential
 ```text
 list_accounts() -> MailAccount[]
 list_messages(account_id, folder) -> MailMessage[]
-test_qq_imap_connection(input) -> ImapConnectionReport
 sync_qq_inbox(input) -> QqInboxSyncReport
 sync_saved_qq_inbox(input) -> QqInboxSyncReport
 ```
 
 The browser-only development fallback now starts empty. The Tauri desktop path reads through Rust and SQLite.
 
-## QQ IMAP Connection Test
+## QQ IMAP Sync
 
-The provider commands cover both connection testing and read-only syncing:
-
-```text
-React form
-  -> test_qq_imap_connection(email, authorization_code)
-  -> Rust connects to imap.qq.com:993 over TLS
-  -> Rust logs in with the QQ Mail authorization code
-  -> Rust opens INBOX with EXAMINE, which is read-only
-  -> Rust returns mailbox counts
-```
+The provider command imports and syncs QQ Mail in one step:
 
 ```text
 React form

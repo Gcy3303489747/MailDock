@@ -21,7 +21,7 @@ export function MailList({
     return (
       <section className="mail-list state-panel" aria-label="Loading messages">
         <p className="state-title">Loading inbox</p>
-        <p className="state-copy">MailDock is asking the Tauri backend for messages.</p>
+        <p className="state-copy">Checking local mail and recent syncs.</p>
       </section>
     );
   }
@@ -42,7 +42,7 @@ export function MailList({
     return (
       <section className="mail-list state-panel" aria-label="Empty inbox">
         <p className="state-title">No messages yet</p>
-        <p className="state-copy">Open the menu and import a QQ mailbox to sync recent inbox mail.</p>
+        <p className="state-copy">Import a QQ mailbox from the menu to sync recent mail.</p>
       </section>
     );
   }

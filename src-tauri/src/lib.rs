@@ -5,7 +5,7 @@ mod models;
 mod security;
 
 use commands::mail::{list_accounts, list_messages};
-use commands::provider::{sync_qq_inbox, sync_saved_qq_inbox, test_qq_imap_connection};
+use commands::provider::{sync_qq_inbox, sync_saved_qq_inbox};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -15,8 +15,7 @@ pub fn run() {
             list_accounts,
             list_messages,
             sync_qq_inbox,
-            sync_saved_qq_inbox,
-            test_qq_imap_connection
+            sync_saved_qq_inbox
         ])
         .run(tauri::generate_context!())
         .expect("error while running MailDock");

@@ -15,8 +15,8 @@ export function MailDetail({ message }: MailDetailProps) {
   if (!message) {
     return (
       <article className="mail-detail empty-detail" aria-label="No message selected">
-        <p className="state-title">Select a message</p>
-        <p className="state-copy">Synced messages will appear here after you import a mailbox.</p>
+        <p className="state-title">No message selected</p>
+        <p className="state-copy">Choose a message from the inbox list.</p>
       </article>
     );
   }
@@ -26,7 +26,6 @@ export function MailDetail({ message }: MailDetailProps) {
   return (
     <article className="mail-detail" aria-label="Message detail">
       <header className="detail-header">
-        <p className="eyebrow">Message preview</p>
         <h2>{message.subject}</h2>
         <div className="detail-meta">
           <span>{message.from}</span>
@@ -60,7 +59,7 @@ export function MailDetail({ message }: MailDetailProps) {
 
 const LINK_PATTERN =
   /\b((?:https?:\/\/|www\.)[^\s<>"']+|mailto:[^\s<>"']+|[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/gi;
-const TRAILING_LINK_PUNCTUATION = /[),.;:!?，。！？；：）]+$/;
+const TRAILING_LINK_PUNCTUATION = /[),.;:!?\uFF0C\u3002\uFF01\uFF1F\uFF1B\uFF1A\uFF09]+$/u;
 
 function renderTextWithLinks(text: string): ReactNode[] {
   const nodes: ReactNode[] = [];

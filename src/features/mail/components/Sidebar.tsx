@@ -62,7 +62,7 @@ export function Sidebar({
 
       <nav className="account-list" aria-label="Configured mailboxes">
         {accounts.length === 0 ? (
-          <p className="empty-account-copy">Use the menu to import a mailbox.</p>
+          <p className="empty-account-copy">Import a mailbox to begin.</p>
         ) : (
           accounts.map((account) => (
             <button
@@ -93,10 +93,6 @@ export function Sidebar({
         />
       )}
 
-      <div className="learning-card">
-        <strong>Week 03</strong>
-        <span>QQ IMAP sync now imports messages into the local SQLite cache.</span>
-      </div>
     </aside>
   );
 }

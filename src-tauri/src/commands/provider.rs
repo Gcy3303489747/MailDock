@@ -1,16 +1,9 @@
 use crate::db;
-use crate::imap::{self, ImapConnectionReport, QqImapConnectionInput, QqInboxSyncInput};
+use crate::imap::{self, QqInboxSyncInput};
 use crate::models::ProviderKind;
 use crate::security::{CredentialKey, CredentialService, SystemCredentialService};
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
-
-#[tauri::command]
-pub fn test_qq_imap_connection(
-    input: QqImapConnectionInput,
-) -> Result<ImapConnectionReport, String> {
-    imap::test_qq_connection(input)
-}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

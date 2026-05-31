@@ -216,7 +216,6 @@ button {
 }
 
 .account-item small,
-.learning-card span,
 .empty-account-copy {
   display: block;
   margin-top: 4px;
@@ -226,14 +225,6 @@ button {
 
 .empty-account-copy {
   margin: 0;
-}
-
-.learning-card {
-  margin-top: auto;
-  padding: 16px;
-  background: #f8fafc;
-  border: 1px solid #d9e1ec;
-  border-radius: 8px;
 }
 
 .connection-panel {
@@ -292,7 +283,6 @@ button {
 
 .connection-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
