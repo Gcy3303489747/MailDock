@@ -81,6 +81,7 @@ export function QqConnectionPanel({ onClose, onSyncComplete }: QqConnectionPanel
       {syncReport && (
         <p className="connection-result">
           Synced {syncReport.stored} messages from {syncReport.address}.
+          {syncReport.credentialSaved ? " Future sync is enabled." : ""}
         </p>
       )}
       {error && <p className="connection-error">{error}</p>}

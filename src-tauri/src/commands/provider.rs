@@ -14,6 +14,7 @@ pub struct QqInboxSyncReport {
     pub fetched: usize,
     pub stored: usize,
     pub total_inbox_messages: u32,
+    pub credential_saved: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -29,9 +30,7 @@ pub fn sync_qq_inbox(app: AppHandle, input: QqInboxSyncInput) -> Result<QqInboxS
     let authorization_code = input.authorization_code.trim().to_owned();
     let payload = imap::sync_qq_inbox(input)?;
     let account_id = db::upsert_qq_account(&app, &address)?;
-    let credential_key = CredentialKey::for_mailbox(ProviderKind::Qq, &address);
-
-    SystemCredentialService.set_secret(&credential_key, &authorization_code)?;
+    save_qq_authorization_code(account_id, &address, &authorization_code)?;
 
     let stored = db::upsert_messages(&app, account_id, "INBOX", &payload.messages)?;
 
@@ -42,6 +41,7 @@ pub fn sync_qq_inbox(app: AppHandle, input: QqInboxSyncInput) -> Result<QqInboxS
         fetched: payload.messages.len(),
         stored,
         total_inbox_messages: payload.report.exists,
+        credential_saved: true,
     })
 }
 
@@ -72,7 +72,27 @@ pub fn sync_saved_qq_inbox(
         fetched: payload.messages.len(),
         stored,
         total_inbox_messages: payload.report.exists,
+        credential_saved: true,
     })
+}
+
+fn save_qq_authorization_code(
+    account_id: i64,
+    address: &str,
+    authorization_code: &str,
+) -> Result<(), String> {
+    let primary_key = CredentialKey::for_mailbox(ProviderKind::Qq, address);
+    let legacy_key = CredentialKey::legacy_account_id(ProviderKind::Qq, account_id);
+
+    SystemCredentialService.set_secret(&primary_key, authorization_code)?;
+    SystemCredentialService.set_secret(&legacy_key, authorization_code)?;
+
+    let saved = saved_qq_authorization_code(&primary_key, account_id)?;
+    if saved == authorization_code {
+        return Ok(());
+    }
+
+    Err("QQ authorization code was accepted, but MailDock could not verify that it was saved. Please import the mailbox again.".into())
 }
 
 fn saved_qq_authorization_code(

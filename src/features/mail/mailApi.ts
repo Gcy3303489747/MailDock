@@ -52,6 +52,7 @@ export async function syncSavedQqInbox(
       fetched: mockMessages.length,
       stored: mockMessages.length,
       totalInboxMessages: mockMessages.length,
+      credentialSaved: false,
     };
   }
 }

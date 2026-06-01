@@ -51,4 +51,5 @@ export interface QqInboxSyncReport {
   fetched: number;
   stored: number;
   totalInboxMessages: number;
+  credentialSaved: boolean;
 }
