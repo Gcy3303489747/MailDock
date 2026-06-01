@@ -83,15 +83,9 @@ The `accounts` table stores provider metadata such as `qq`, `fudan`, or `gmail`,
 
 ## Local Development
 
-Install the required tools first:
+Install the required Windows development tools first. See [Windows Development Setup](docs/setup/windows.md) for the tool list and optional helper script.
 
-- Git
-- Node.js LTS, including npm
-- Rust stable MSVC toolchain
-- Microsoft Visual Studio C++ Build Tools
-- WebView2 Runtime
-
-Then run:
+Then install dependencies and start the desktop app:
 
 ```powershell
 npm install
