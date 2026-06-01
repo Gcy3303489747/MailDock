@@ -19,6 +19,7 @@ export default function App() {
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   const selectedMessage = useMemo(
     () => messages.find((message) => message.id === selectedMessageId) ?? null,
@@ -33,6 +34,7 @@ export default function App() {
   async function refreshMessages(accountIdOverride?: number, options: RefreshOptions = {}) {
     setIsLoading(true);
     setError(null);
+    setSyncError(null);
 
     try {
       const nextAccounts = await loadAccounts();
@@ -56,14 +58,13 @@ export default function App() {
         return;
       }
 
+      let nextSyncError: string | null = null;
+
       if (options.syncSaved) {
         try {
           await syncSavedQqInbox({ accountId: nextAccountId, limit: 50 });
         } catch (syncError) {
-          if (!options.quietCredentialError) {
-            throw syncError;
-          }
-
+          nextSyncError = messageFromUnknown(syncError, "Unable to sync inbox.");
           console.info("Saved credential sync skipped; showing cached inbox instead.", syncError);
         }
       }
@@ -78,10 +79,12 @@ export default function App() {
         const stillExists = nextMessages.some((message) => message.id === currentId);
         return stillExists ? currentId : nextMessages[0].id;
       });
+
+      if (nextSyncError && !options.quietCredentialError) {
+        setSyncError(nextSyncError);
+      }
     } catch (unknownError) {
-      const message =
-        unknownError instanceof Error ? unknownError.message : "Unable to load messages.";
-      setError(message);
+      setError(messageFromUnknown(unknownError, "Unable to load messages."));
     } finally {
       setIsLoading(false);
     }
@@ -112,6 +115,7 @@ export default function App() {
           isLoading={isLoading}
           messageCount={messages.length}
           onRefresh={() => void refreshMessages(undefined, { syncSaved: true })}
+          syncError={syncError}
         />
         <div className="mail-columns">
           <MailList
@@ -127,4 +131,16 @@ export default function App() {
       </section>
     </main>
   );
+}
+
+function messageFromUnknown(unknownError: unknown, fallback: string): string {
+  if (unknownError instanceof Error && unknownError.message) {
+    return unknownError.message;
+  }
+
+  if (typeof unknownError === "string" && unknownError.trim()) {
+    return unknownError;
+  }
+
+  return fallback;
 }

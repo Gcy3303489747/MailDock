@@ -6,9 +6,17 @@ interface ToolbarProps {
   isLoading: boolean;
   messageCount: number;
   onRefresh: () => void;
+  syncError: string | null;
 }
 
-export function Toolbar({ account, folder, isLoading, messageCount, onRefresh }: ToolbarProps) {
+export function Toolbar({
+  account,
+  folder,
+  isLoading,
+  messageCount,
+  onRefresh,
+  syncError,
+}: ToolbarProps) {
   return (
     <header className="toolbar">
       <div>
@@ -17,6 +25,7 @@ export function Toolbar({ account, folder, isLoading, messageCount, onRefresh }:
         </p>
         <h2>Inbox</h2>
         {account && <p className="toolbar-account">{account.address}</p>}
+        {syncError && <p className="toolbar-sync-error">{syncError}</p>}
       </div>
       <div className="toolbar-actions">
         <span className="message-count">{messageCount} messages</span>

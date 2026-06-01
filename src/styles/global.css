@@ -334,6 +334,14 @@ button {
   font-size: 0.9rem;
 }
 
+.toolbar-sync-error {
+  max-width: 640px;
+  margin: 8px 0 0;
+  color: #b4233a;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
 .toolbar-actions {
   display: flex;
   align-items: center;
