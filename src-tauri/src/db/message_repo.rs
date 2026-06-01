@@ -1,3 +1,4 @@
+use crate::mail_text::normalize_display_text;
 use crate::models::MailMessage;
 use rusqlite::{params, Connection};
 
@@ -20,8 +21,8 @@ pub(crate) fn list_messages(
         .query_map(params![account_id, folder], |row| {
             Ok(MailMessage {
                 id: row.get(0)?,
-                from: row.get(1)?,
-                subject: row.get(2)?,
+                from: normalize_display_text(row.get::<_, String>(1)?),
+                subject: normalize_display_text(row.get::<_, String>(2)?),
                 received_at: row.get(3)?,
                 preview: row.get(4)?,
                 body: row.get(5)?,
@@ -175,5 +176,36 @@ mod tests {
         assert!(messages
             .iter()
             .any(|message| message.id == "qq:student@qq.com:10"));
+    }
+
+    #[test]
+    fn decodes_cached_mixed_q_encoded_subject_on_read() {
+        let connection = Connection::open_in_memory().expect("open test database");
+        initialize_connection(&connection).expect("initialize schema");
+        let account_id =
+            upsert_qq_account(&connection, "student@qq.com").expect("upsert QQ account");
+
+        upsert_messages(
+            &connection,
+            account_id,
+            "INBOX",
+            &[MailMessage {
+                id: "qq:student@qq.com:20".into(),
+                from: "=?utf-8?Q?=E9=82=AE=E4=BB=B6=E6=9C=8D=E5=8A=A1?= <service@qq.com>".into(),
+                subject: "www.donkX.net邮箱验=?utf-8?Q?=E8=AF=81=E7=A0=81?=".into(),
+                received_at: "2026-05-29T08:00:00+08:00".into(),
+                preview: "Cached encoded subject sample.".into(),
+                body: "Cached encoded subject sample.".into(),
+                has_attachments: false,
+                is_unread: true,
+            }],
+        )
+        .expect("upsert messages");
+
+        let messages = list_messages(&connection, account_id, "INBOX").expect("list messages");
+
+        assert_eq!(messages[0].subject, "www.donkX.net邮箱验证码");
+        assert_eq!(messages[0].from, "邮件服务 <service@qq.com>");
+        assert!(!messages[0].subject.contains("=?"));
     }
 }

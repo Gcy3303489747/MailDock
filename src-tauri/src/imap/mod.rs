@@ -1,8 +1,7 @@
-use base64::{engine::general_purpose, Engine as _};
-use encoding_rs::Encoding;
 use mailparse::{addrparse, addrparse_header, parse_mail, MailAddr, MailHeaderMap, ParsedMail};
 use serde::{Deserialize, Serialize};
 
+use crate::mail_text::{clean_text, normalize_body_text, normalize_display_text};
 use crate::models::MailMessage;
 
 const QQ_IMAP_HOST: &str = "imap.qq.com";
@@ -151,8 +150,13 @@ fn mail_message_from_raw(
 fn decoded_header(parsed: &ParsedMail<'_>, key: &str) -> Option<String> {
     let header = parsed.headers.get_first_header(key)?;
     let raw_value = String::from_utf8_lossy(header.get_value_raw());
-    let decoded = decode_rfc2047_words(&raw_value).unwrap_or_else(|| header.get_value());
-    Some(normalize_display_text(decoded))
+    let decoded = normalize_display_text(&raw_value);
+
+    if decoded.contains("=?") {
+        return Some(normalize_display_text(header.get_value()));
+    }
+
+    Some(decoded)
 }
 
 fn decoded_from(parsed: &ParsedMail<'_>) -> Option<String> {
@@ -166,25 +170,13 @@ fn decoded_from(parsed: &ParsedMail<'_>) -> Option<String> {
     match first {
         MailAddr::Single(info) => Some(match &info.display_name {
             Some(display_name) if !display_name.trim().is_empty() => {
-                format!(
-                    "{} <{}>",
-                    normalize_display_text(
-                        decode_rfc2047_words(display_name).unwrap_or_else(|| display_name.clone())
-                    ),
-                    info.addr
-                )
+                format!("{} <{}>", normalize_display_text(display_name), info.addr)
             }
             _ => info.addr.clone(),
         }),
         MailAddr::Group(group) => group.addrs.first().map(|info| match &info.display_name {
             Some(display_name) if !display_name.trim().is_empty() => {
-                format!(
-                    "{} <{}>",
-                    normalize_display_text(
-                        decode_rfc2047_words(display_name).unwrap_or_else(|| display_name.clone())
-                    ),
-                    info.addr
-                )
+                format!("{} <{}>", normalize_display_text(display_name), info.addr)
             }
             _ => info.addr.clone(),
         }),
@@ -238,169 +230,6 @@ fn validate_credentials(email: &str, authorization_code: &str) -> Result<(), Str
     }
 
     Ok(())
-}
-
-fn normalize_display_text(value: impl AsRef<str>) -> String {
-    repair_utf8_decoded_as_gbk(&clean_text(value))
-}
-
-fn normalize_body_text(value: impl AsRef<str>) -> String {
-    let repaired = repair_utf8_decoded_as_gbk(value.as_ref());
-    let normalized = repaired.replace("\r\n", "\n").replace('\r', "\n");
-    let mut lines = Vec::new();
-    let mut blank_count = 0;
-
-    for line in normalized.lines() {
-        let trimmed_end = line.trim_end();
-
-        if trimmed_end.trim().is_empty() {
-            blank_count += 1;
-            if blank_count <= 2 && !lines.is_empty() {
-                lines.push(String::new());
-            }
-            continue;
-        }
-
-        blank_count = 0;
-        lines.push(trimmed_end.to_owned());
-    }
-
-    while lines.last().is_some_and(|line| line.is_empty()) {
-        lines.pop();
-    }
-
-    lines.join("\n").trim().to_owned()
-}
-
-fn clean_text(value: impl AsRef<str>) -> String {
-    value
-        .as_ref()
-        .replace("\r\n", "\n")
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-fn decode_rfc2047_words(value: &str) -> Option<String> {
-    let mut output = String::new();
-    let mut remainder = value;
-    let mut decoded_any = false;
-    let mut previous_was_encoded = false;
-
-    while let Some(start) = remainder.find("=?") {
-        let before = &remainder[..start];
-        if !(previous_was_encoded && before.trim().is_empty()) {
-            output.push_str(before);
-        }
-
-        let encoded_remainder = &remainder[start + 2..];
-        let Some(end) = encoded_remainder.find("?=") else {
-            output.push_str(&remainder[start..]);
-            return decoded_any.then_some(output);
-        };
-
-        let encoded_word = &encoded_remainder[..end];
-        if let Some(decoded_word) = decode_rfc2047_word(encoded_word) {
-            output.push_str(&decoded_word);
-            decoded_any = true;
-            previous_was_encoded = true;
-        } else {
-            output.push_str("=?");
-            output.push_str(encoded_word);
-            output.push_str("?=");
-            previous_was_encoded = false;
-        }
-
-        remainder = &encoded_remainder[end + 2..];
-    }
-
-    output.push_str(remainder);
-    decoded_any.then_some(output)
-}
-
-fn decode_rfc2047_word(encoded_word: &str) -> Option<String> {
-    let mut parts = encoded_word.splitn(3, '?');
-    let charset = parts.next()?.trim();
-    let encoding = parts.next()?.trim();
-    let payload = parts.next()?.trim();
-
-    let bytes = match encoding.to_ascii_lowercase().as_str() {
-        "b" => decode_base64_payload(payload)?,
-        "q" => decode_rfc2047_q_payload(payload)?,
-        _ => return None,
-    };
-
-    decode_charset(charset, &bytes)
-}
-
-fn decode_base64_payload(payload: &str) -> Option<Vec<u8>> {
-    let cleaned = payload
-        .chars()
-        .filter(|character| !character.is_whitespace())
-        .collect::<String>();
-
-    if cleaned.is_empty() {
-        return Some(Vec::new());
-    }
-
-    general_purpose::STANDARD
-        .decode(&cleaned)
-        .or_else(|_| general_purpose::STANDARD_NO_PAD.decode(&cleaned))
-        .or_else(|_| {
-            let padding = (4 - cleaned.len() % 4) % 4;
-            let mut padded = cleaned.clone();
-            padded.extend(std::iter::repeat('=').take(padding));
-            general_purpose::STANDARD.decode(padded)
-        })
-        .ok()
-}
-
-fn decode_rfc2047_q_payload(payload: &str) -> Option<Vec<u8>> {
-    let bytes = payload.as_bytes();
-    let mut decoded = Vec::with_capacity(bytes.len());
-    let mut index = 0;
-
-    while index < bytes.len() {
-        match bytes[index] {
-            b'_' => {
-                decoded.push(b' ');
-                index += 1;
-            }
-            b'=' if index + 2 < bytes.len() => {
-                let hex = std::str::from_utf8(&bytes[index + 1..index + 3]).ok()?;
-                decoded.push(u8::from_str_radix(hex, 16).ok()?);
-                index += 3;
-            }
-            byte => {
-                decoded.push(byte);
-                index += 1;
-            }
-        }
-    }
-
-    Some(decoded)
-}
-
-fn decode_charset(charset: &str, bytes: &[u8]) -> Option<String> {
-    let encoding = Encoding::for_label(charset.as_bytes())?;
-    let (decoded, _, had_errors) = encoding.decode(bytes);
-
-    if had_errors {
-        return None;
-    }
-
-    Some(decoded.into_owned())
-}
-
-fn repair_utf8_decoded_as_gbk(value: &str) -> String {
-    let (encoded, _, had_errors) = encoding_rs::GBK.encode(value);
-    if had_errors {
-        return value.to_owned();
-    }
-
-    String::from_utf8(encoded.into_owned()).unwrap_or_else(|_| value.to_owned())
 }
 
 fn looks_like_multipart_preamble(value: &str) -> bool {
@@ -523,6 +352,30 @@ mod tests {
     }
 
     #[test]
+    fn decodes_mixed_plain_text_and_q_encoded_subject() {
+        let raw_message = concat!(
+            "From: <service@qq.com>\r\n",
+            "Subject: www.donkX.net邮箱验=?utf-8?Q?=E8=AF=81=E7=A0=81?=\r\n",
+            "Date: Fri, 29 May 2026 09:30:00 +0800\r\n",
+            "Content-Type: text/plain; charset=utf-8\r\n",
+            "\r\n",
+            "hello"
+        );
+
+        let message = mail_message_from_raw(
+            "student@qq.com",
+            45,
+            raw_message.as_bytes(),
+            "2026-05-29T09:30:00+08:00".into(),
+            true,
+        )
+        .expect("parse message");
+
+        assert_eq!(message.subject, "www.donkX.net邮箱验证码");
+        assert!(!message.subject.contains("=?"));
+    }
+
+    #[test]
     fn preserves_body_paragraph_breaks() {
         let raw_message = concat!(
             "From: <service@qq.com>\r\n",
@@ -539,7 +392,7 @@ mod tests {
 
         let message = mail_message_from_raw(
             "student@qq.com",
-            45,
+            46,
             raw_message.as_bytes(),
             "2026-05-29T09:30:00+08:00".into(),
             true,
@@ -565,7 +418,7 @@ mod tests {
 
         let message = mail_message_from_raw(
             "student@qq.com",
-            46,
+            47,
             raw_message.as_bytes(),
             "2026-05-29T09:30:00+08:00".into(),
             true,

@@ -1,6 +1,7 @@
 mod commands;
 mod db;
 mod imap;
+mod mail_text;
 mod models;
 mod security;
 
