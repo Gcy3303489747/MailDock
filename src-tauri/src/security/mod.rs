@@ -6,8 +6,27 @@ const SERVICE_NAME: &str = "MailDock";
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct CredentialKey {
-    pub account_id: i64,
     pub provider: ProviderKind,
+    pub account_id: Option<i64>,
+    pub address: Option<String>,
+}
+
+impl CredentialKey {
+    pub fn for_mailbox(provider: ProviderKind, address: &str) -> Self {
+        Self {
+            provider,
+            account_id: None,
+            address: Some(address.trim().to_lowercase()),
+        }
+    }
+
+    pub fn legacy_account_id(provider: ProviderKind, account_id: i64) -> Self {
+        Self {
+            provider,
+            account_id: Some(account_id),
+            address: None,
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -48,7 +67,14 @@ fn credential_entry(key: &CredentialKey) -> Result<Entry, String> {
 }
 
 fn credential_account_name(key: &CredentialKey) -> String {
-    format!("{}:{}", provider_key(&key.provider), key.account_id)
+    if let Some(address) = key.address.as_deref().filter(|value| !value.is_empty()) {
+        return format!("{}:{}", provider_key(&key.provider), address);
+    }
+
+    match key.account_id {
+        Some(account_id) => format!("{}:{}", provider_key(&key.provider), account_id),
+        None => format!("{}:unknown", provider_key(&key.provider)),
+    }
 }
 
 fn provider_key(provider: &ProviderKind) -> &'static str {
@@ -64,11 +90,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn builds_stable_credential_account_name() {
-        let key = CredentialKey {
-            account_id: 42,
-            provider: ProviderKind::Qq,
-        };
+    fn builds_stable_address_credential_account_name() {
+        let key = CredentialKey::for_mailbox(ProviderKind::Qq, "Student@qq.com");
+
+        assert_eq!(credential_account_name(&key), "qq:student@qq.com");
+    }
+
+    #[test]
+    fn builds_legacy_credential_account_name() {
+        let key = CredentialKey::legacy_account_id(ProviderKind::Qq, 42);
 
         assert_eq!(credential_account_name(&key), "qq:42");
     }

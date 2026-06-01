@@ -1,5 +1,6 @@
 use crate::mail_text::normalize_display_text;
 use crate::models::MailMessage;
+use mailparse::dateparse;
 use rusqlite::{params, Connection};
 
 pub(crate) fn list_messages(
@@ -11,9 +12,7 @@ pub(crate) fn list_messages(
         .prepare(
             "SELECT id, from_address, subject, received_at, preview, body, has_attachments, is_unread
              FROM messages
-             WHERE account_id = ?1 AND folder = ?2
-             ORDER BY received_at DESC
-             LIMIT 100",
+             WHERE account_id = ?1 AND folder = ?2",
         )
         .map_err(|error| format!("Failed to prepare message query: {error}"))?;
 
@@ -32,8 +31,18 @@ pub(crate) fn list_messages(
         })
         .map_err(|error| format!("Failed to read messages: {error}"))?;
 
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|error| format!("Failed to map messages: {error}"))
+    let mut messages = rows
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("Failed to map messages: {error}"))?;
+
+    messages.sort_by(|left, right| {
+        received_at_sort_key(&right.received_at)
+            .cmp(&received_at_sort_key(&left.received_at))
+            .then_with(|| right.id.cmp(&left.id))
+    });
+    messages.truncate(100);
+
+    Ok(messages)
 }
 
 pub(crate) fn upsert_messages(
@@ -100,6 +109,63 @@ pub(crate) fn upsert_messages(
         .map_err(|error| format!("Failed to update sync state: {error}"))?;
 
     Ok(stored_count)
+}
+
+fn received_at_sort_key(value: &str) -> i64 {
+    dateparse(value)
+        .ok()
+        .or_else(|| parse_rfc3339_timestamp(value))
+        .unwrap_or(0)
+}
+
+fn parse_rfc3339_timestamp(value: &str) -> Option<i64> {
+    if value.len() < 20 {
+        return None;
+    }
+
+    let year = parse_i64(value, 0, 4)?;
+    let month = parse_i64(value, 5, 7)?;
+    let day = parse_i64(value, 8, 10)?;
+    let hour = parse_i64(value, 11, 13)?;
+    let minute = parse_i64(value, 14, 16)?;
+    let second = parse_i64(value, 17, 19)?;
+
+    let timezone_start = value[19..]
+        .find(|character| matches!(character, 'Z' | '+' | '-'))
+        .map(|index| index + 19)?;
+    let timezone = &value[timezone_start..];
+    let offset_seconds = if timezone == "Z" {
+        0
+    } else {
+        let sign = match timezone.as_bytes().first().copied()? {
+            b'+' => 1,
+            b'-' => -1,
+            _ => return None,
+        };
+        let offset_hour = parse_i64(timezone, 1, 3)?;
+        let offset_minute = parse_i64(timezone, 4, 6)?;
+        sign * (offset_hour * 3600 + offset_minute * 60)
+    };
+
+    Some(
+        days_from_civil(year, month, day) * 86_400 + hour * 3600 + minute * 60 + second
+            - offset_seconds,
+    )
+}
+
+fn parse_i64(value: &str, start: usize, end: usize) -> Option<i64> {
+    value.get(start..end)?.parse().ok()
+}
+
+fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
+    let year = year - i64::from(month <= 2);
+    let era = if year >= 0 { year } else { year - 399 } / 400;
+    let year_of_era = year - era * 400;
+    let month_prime = month + if month > 2 { -3 } else { 9 };
+    let day_of_year = (153 * month_prime + 2) / 5 + day - 1;
+    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+
+    era * 146_097 + day_of_era - 719_468
 }
 
 #[cfg(test)]
@@ -176,6 +242,56 @@ mod tests {
         assert!(messages
             .iter()
             .any(|message| message.id == "qq:student@qq.com:10"));
+    }
+
+    #[test]
+    fn lists_newest_messages_first() {
+        let connection = Connection::open_in_memory().expect("open test database");
+        initialize_connection(&connection).expect("initialize schema");
+        let account_id =
+            upsert_qq_account(&connection, "student@qq.com").expect("upsert QQ account");
+
+        upsert_messages(
+            &connection,
+            account_id,
+            "INBOX",
+            &[
+                MailMessage {
+                    id: "qq:student@qq.com:older".into(),
+                    from: "Older <older@example.com>".into(),
+                    subject: "Older".into(),
+                    received_at: "2026-05-29T08:00:00+08:00".into(),
+                    preview: "Older message.".into(),
+                    body: "Older message.".into(),
+                    has_attachments: false,
+                    is_unread: false,
+                },
+                MailMessage {
+                    id: "qq:student@qq.com:newer".into(),
+                    from: "Newer <newer@example.com>".into(),
+                    subject: "Newer".into(),
+                    received_at: "2026-05-29T10:00:00+08:00".into(),
+                    preview: "Newer message.".into(),
+                    body: "Newer message.".into(),
+                    has_attachments: false,
+                    is_unread: true,
+                },
+            ],
+        )
+        .expect("upsert messages");
+
+        let messages = list_messages(&connection, account_id, "INBOX").expect("list messages");
+
+        assert_eq!(messages[0].id, "qq:student@qq.com:newer");
+        assert_eq!(messages[1].id, "qq:student@qq.com:older");
+    }
+
+    #[test]
+    fn sorts_cached_rfc2822_dates_with_rfc3339_dates() {
+        assert!(
+            received_at_sort_key("Fri, 29 May 2026 09:30:00 +0800")
+                > received_at_sort_key("2026-05-29T08:00:00+08:00")
+        );
     }
 
     #[test]

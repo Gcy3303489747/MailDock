@@ -1,7 +1,7 @@
 use mailparse::{addrparse, addrparse_header, parse_mail, MailAddr, MailHeaderMap, ParsedMail};
 use serde::{Deserialize, Serialize};
 
-use crate::mail_text::{clean_text, normalize_body_text, normalize_display_text};
+use crate::mail_text::{normalize_body_text, normalize_display_text};
 use crate::models::MailMessage;
 
 const QQ_IMAP_HOST: &str = "imap.qq.com";
@@ -120,12 +120,7 @@ fn mail_message_from_raw(
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| "(No subject)".into());
     let from = decoded_from(&parsed).unwrap_or_else(|| "(Unknown sender)".into());
-    let received_at = parsed
-        .headers
-        .get_first_value("Date")
-        .map(clean_text)
-        .filter(|value| !value.is_empty())
-        .unwrap_or(fallback_received_at);
+    let received_at = fallback_received_at;
     let body = decoded_text_body(&parsed)
         .map(normalize_body_text)
         .filter(|value| !value.is_empty())
@@ -403,6 +398,29 @@ mod tests {
             message.body,
             "First paragraph\n\n> Quoted reply\n\nSecond paragraph"
         );
+    }
+
+    #[test]
+    fn keeps_received_at_as_rfc3339_internal_date_for_sorting() {
+        let raw_message = concat!(
+            "From: <service@qq.com>\r\n",
+            "Subject: Sorting sample\r\n",
+            "Date: Fri, 29 May 2026 09:30:00 +0800\r\n",
+            "Content-Type: text/plain; charset=utf-8\r\n",
+            "\r\n",
+            "hello"
+        );
+
+        let message = mail_message_from_raw(
+            "student@qq.com",
+            48,
+            raw_message.as_bytes(),
+            "2026-05-29T10:00:00+08:00".into(),
+            true,
+        )
+        .expect("parse message");
+
+        assert_eq!(message.received_at, "2026-05-29T10:00:00+08:00");
     }
 
     #[test]

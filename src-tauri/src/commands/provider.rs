@@ -29,10 +29,7 @@ pub fn sync_qq_inbox(app: AppHandle, input: QqInboxSyncInput) -> Result<QqInboxS
     let authorization_code = input.authorization_code.trim().to_owned();
     let payload = imap::sync_qq_inbox(input)?;
     let account_id = db::upsert_qq_account(&app, &address)?;
-    let credential_key = CredentialKey {
-        account_id,
-        provider: ProviderKind::Qq,
-    };
+    let credential_key = CredentialKey::for_mailbox(ProviderKind::Qq, &address);
 
     SystemCredentialService.set_secret(&credential_key, &authorization_code)?;
 
@@ -58,13 +55,8 @@ pub fn sync_saved_qq_inbox(
         return Err("Saved sync is currently only available for QQ Mail accounts.".into());
     }
 
-    let credential_key = CredentialKey {
-        account_id: account.id,
-        provider: ProviderKind::Qq,
-    };
-    let authorization_code = SystemCredentialService
-        .get_secret(&credential_key)?
-        .ok_or_else(|| "No saved QQ authorization code found. Import this mailbox again to enable automatic sync.".to_string())?;
+    let credential_key = CredentialKey::for_mailbox(ProviderKind::Qq, &account.address);
+    let authorization_code = saved_qq_authorization_code(&credential_key, account.id)?;
 
     let payload = imap::sync_qq_inbox(QqInboxSyncInput {
         email: account.address.clone(),
@@ -81,4 +73,24 @@ pub fn sync_saved_qq_inbox(
         stored,
         total_inbox_messages: payload.report.exists,
     })
+}
+
+fn saved_qq_authorization_code(
+    credential_key: &CredentialKey,
+    account_id: i64,
+) -> Result<String, String> {
+    if let Some(secret) = SystemCredentialService.get_secret(credential_key)? {
+        return Ok(secret);
+    }
+
+    let legacy_key = CredentialKey::legacy_account_id(ProviderKind::Qq, account_id);
+    if let Some(secret) = SystemCredentialService.get_secret(&legacy_key)? {
+        SystemCredentialService.set_secret(credential_key, &secret)?;
+        return Ok(secret);
+    }
+
+    Err(
+        "No saved QQ authorization code found. Import this mailbox again to enable automatic sync."
+            .into(),
+    )
 }
