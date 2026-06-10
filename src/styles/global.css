@@ -334,6 +334,13 @@ button {
   font-size: 0.9rem;
 }
 
+.toolbar-sync-status {
+  margin: 6px 0 0;
+  color: #0f766e;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
 .toolbar-sync-error {
   max-width: 640px;
   margin: 8px 0 0;

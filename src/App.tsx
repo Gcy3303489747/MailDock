@@ -10,6 +10,8 @@ interface SyncOptions {
   quietCredentialError?: boolean;
 }
 
+const AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+
 export default function App() {
   const [accounts, setAccounts] = useState<MailAccount[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
@@ -20,6 +22,8 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
+  const isSyncingRef = useRef(false);
   const selectedAccountIdRef = useRef<number | null>(null);
 
   const selectedMessage = useMemo(
@@ -72,10 +76,11 @@ export default function App() {
   }
 
   async function syncMailbox(accountId: number | null, options: SyncOptions = {}) {
-    if (accountId === null) {
+    if (accountId === null || isSyncingRef.current) {
       return;
     }
 
+    isSyncingRef.current = true;
     setIsSyncing(true);
     setSyncError(null);
 
@@ -83,6 +88,7 @@ export default function App() {
       await syncSavedQqInbox({ accountId, limit: 50 });
       const nextMessages = await loadInboxMessages(accountId, selectedFolder);
       applyMessages(accountId, nextMessages);
+      setLastSyncedAt(new Date());
     } catch (syncError) {
       const nextSyncError = messageFromUnknown(syncError, "Unable to sync inbox.");
       console.info("Saved credential sync skipped; showing cached inbox instead.", syncError);
@@ -91,6 +97,7 @@ export default function App() {
         setSyncError(nextSyncError);
       }
     } finally {
+      isSyncingRef.current = false;
       setIsSyncing(false);
     }
   }
@@ -118,6 +125,14 @@ export default function App() {
     })();
   }, []);
 
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      void syncMailbox(selectedAccountIdRef.current);
+    }, AUTO_SYNC_INTERVAL_MS);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
+
   return (
     <main className="app-shell">
       <Sidebar
@@ -126,11 +141,15 @@ export default function App() {
         onSelectAccount={(accountId) => {
           selectedAccountIdRef.current = accountId;
           setSelectedAccountId(accountId);
-          void loadCachedMailbox(accountId);
+          void (async () => {
+            const nextAccountId = await loadCachedMailbox(accountId);
+            void syncMailbox(nextAccountId);
+          })();
         }}
         onSyncComplete={(accountId) => {
           selectedAccountIdRef.current = accountId;
           setSelectedAccountId(accountId);
+          setLastSyncedAt(new Date());
           void loadCachedMailbox(accountId);
         }}
       />
@@ -138,6 +157,7 @@ export default function App() {
         <Toolbar
           account={selectedAccount}
           folder={selectedFolder}
+          lastSyncedAt={lastSyncedAt}
           isSyncing={isSyncing}
           messageCount={messages.length}
           onRefresh={() => void syncMailbox(selectedAccountIdRef.current)}

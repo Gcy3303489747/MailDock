@@ -3,6 +3,7 @@ import type { MailAccount, MailFolder } from "../types";
 interface ToolbarProps {
   account: MailAccount | null;
   folder: MailFolder;
+  lastSyncedAt: Date | null;
   isSyncing: boolean;
   messageCount: number;
   onRefresh: () => void;
@@ -12,6 +13,7 @@ interface ToolbarProps {
 export function Toolbar({
   account,
   folder,
+  lastSyncedAt,
   isSyncing,
   messageCount,
   onRefresh,
@@ -25,6 +27,15 @@ export function Toolbar({
         </p>
         <h2>Inbox</h2>
         {account && <p className="toolbar-account">{account.address}</p>}
+        {account && (
+          <p className="toolbar-sync-status">
+            {isSyncing
+              ? "Auto syncing..."
+              : lastSyncedAt
+                ? `Auto sync on. Last synced ${formatTime(lastSyncedAt)}.`
+                : "Auto sync on. Waiting for first background sync."}
+          </p>
+        )}
         {syncError && <p className="toolbar-sync-error">{syncError}</p>}
       </div>
       <div className="toolbar-actions">
@@ -35,11 +46,18 @@ export function Toolbar({
           onClick={onRefresh}
           type="button"
         >
-          {isSyncing ? "Syncing" : "Sync now"}
+          {isSyncing ? "Syncing" : "Refresh"}
         </button>
       </div>
     </header>
   );
+}
+
+function formatTime(value: Date): string {
+  return new Intl.DateTimeFormat("en", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(value);
 }
 
 function providerLabel(provider: MailAccount["provider"]): string {
