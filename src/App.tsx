@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MailDetail } from "./features/mail/components/MailDetail";
 import { MailList } from "./features/mail/components/MailList";
 import { Sidebar } from "./features/mail/components/Sidebar";
@@ -6,8 +6,7 @@ import { Toolbar } from "./features/mail/components/Toolbar";
 import { loadAccounts, loadInboxMessages, syncSavedQqInbox } from "./features/mail/mailApi";
 import type { MailAccount, MailFolder, MailMessage } from "./features/mail/types";
 
-interface RefreshOptions {
-  syncSaved?: boolean;
+interface SyncOptions {
   quietCredentialError?: boolean;
 }
 
@@ -18,8 +17,10 @@ export default function App() {
   const [messages, setMessages] = useState<MailMessage[]>([]);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const selectedAccountIdRef = useRef<number | null>(null);
 
   const selectedMessage = useMemo(
     () => messages.find((message) => message.id === selectedMessageId) ?? null,
@@ -31,10 +32,9 @@ export default function App() {
     [accounts, selectedAccountId],
   );
 
-  async function refreshMessages(accountIdOverride?: number, options: RefreshOptions = {}) {
+  async function loadCachedMailbox(accountIdOverride?: number): Promise<number | null> {
     setIsLoading(true);
     setError(null);
-    setSyncError(null);
 
     try {
       const nextAccounts = await loadAccounts();
@@ -50,48 +50,72 @@ export default function App() {
         nextAccounts[0]?.id ??
         null;
 
+      selectedAccountIdRef.current = nextAccountId;
       setSelectedAccountId(nextAccountId);
 
       if (nextAccountId === null) {
         setMessages([]);
         setSelectedMessageId(null);
-        return;
-      }
-
-      let nextSyncError: string | null = null;
-
-      if (options.syncSaved) {
-        try {
-          await syncSavedQqInbox({ accountId: nextAccountId, limit: 50 });
-        } catch (syncError) {
-          nextSyncError = messageFromUnknown(syncError, "Unable to sync inbox.");
-          console.info("Saved credential sync skipped; showing cached inbox instead.", syncError);
-        }
+        return null;
       }
 
       const nextMessages = await loadInboxMessages(nextAccountId, selectedFolder);
-      setMessages(nextMessages);
-      setSelectedMessageId((currentId) => {
-        if (nextMessages.length === 0) {
-          return null;
-        }
+      applyMessages(nextAccountId, nextMessages);
 
-        const stillExists = nextMessages.some((message) => message.id === currentId);
-        return stillExists ? currentId : nextMessages[0].id;
-      });
-
-      if (nextSyncError && !options.quietCredentialError) {
-        setSyncError(nextSyncError);
-      }
+      return nextAccountId;
     } catch (unknownError) {
       setError(messageFromUnknown(unknownError, "Unable to load messages."));
+      return null;
     } finally {
       setIsLoading(false);
     }
   }
 
+  async function syncMailbox(accountId: number | null, options: SyncOptions = {}) {
+    if (accountId === null) {
+      return;
+    }
+
+    setIsSyncing(true);
+    setSyncError(null);
+
+    try {
+      await syncSavedQqInbox({ accountId, limit: 50 });
+      const nextMessages = await loadInboxMessages(accountId, selectedFolder);
+      applyMessages(accountId, nextMessages);
+    } catch (syncError) {
+      const nextSyncError = messageFromUnknown(syncError, "Unable to sync inbox.");
+      console.info("Saved credential sync skipped; showing cached inbox instead.", syncError);
+
+      if (!options.quietCredentialError) {
+        setSyncError(nextSyncError);
+      }
+    } finally {
+      setIsSyncing(false);
+    }
+  }
+
+  function applyMessages(accountId: number, nextMessages: MailMessage[]) {
+    if (selectedAccountIdRef.current !== accountId) {
+      return;
+    }
+
+    setMessages(nextMessages);
+    setSelectedMessageId((currentId) => {
+      if (nextMessages.length === 0) {
+        return null;
+      }
+
+      const stillExists = nextMessages.some((message) => message.id === currentId);
+      return stillExists ? currentId : nextMessages[0].id;
+    });
+  }
+
   useEffect(() => {
-    void refreshMessages(undefined, { syncSaved: true, quietCredentialError: true });
+    void (async () => {
+      const accountId = await loadCachedMailbox();
+      void syncMailbox(accountId, { quietCredentialError: true });
+    })();
   }, []);
 
   return (
@@ -100,21 +124,23 @@ export default function App() {
         accounts={accounts}
         selectedAccountId={selectedAccountId}
         onSelectAccount={(accountId) => {
+          selectedAccountIdRef.current = accountId;
           setSelectedAccountId(accountId);
-          void refreshMessages(accountId);
+          void loadCachedMailbox(accountId);
         }}
         onSyncComplete={(accountId) => {
+          selectedAccountIdRef.current = accountId;
           setSelectedAccountId(accountId);
-          void refreshMessages(accountId);
+          void loadCachedMailbox(accountId);
         }}
       />
       <section className="mail-workspace" aria-label="MailDock inbox">
         <Toolbar
           account={selectedAccount}
           folder={selectedFolder}
-          isLoading={isLoading}
+          isSyncing={isSyncing}
           messageCount={messages.length}
-          onRefresh={() => void refreshMessages(undefined, { syncSaved: true })}
+          onRefresh={() => void syncMailbox(selectedAccountIdRef.current)}
           syncError={syncError}
         />
         <div className="mail-columns">
@@ -124,7 +150,7 @@ export default function App() {
             messages={messages}
             selectedMessageId={selectedMessageId}
             onSelectMessage={setSelectedMessageId}
-            onRetry={() => void refreshMessages()}
+            onRetry={() => void loadCachedMailbox()}
           />
           <MailDetail message={selectedMessage} />
         </div>

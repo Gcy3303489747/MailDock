@@ -21,7 +21,7 @@ export function MailList({
     return (
       <section className="mail-list state-panel" aria-label="Loading messages">
         <p className="state-title">Loading inbox</p>
-        <p className="state-copy">Checking local mail and recent syncs.</p>
+        <p className="state-copy">Checking local cached mail.</p>
       </section>
     );
   }

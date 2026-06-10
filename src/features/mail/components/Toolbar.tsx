@@ -3,7 +3,7 @@ import type { MailAccount, MailFolder } from "../types";
 interface ToolbarProps {
   account: MailAccount | null;
   folder: MailFolder;
-  isLoading: boolean;
+  isSyncing: boolean;
   messageCount: number;
   onRefresh: () => void;
   syncError: string | null;
@@ -12,7 +12,7 @@ interface ToolbarProps {
 export function Toolbar({
   account,
   folder,
-  isLoading,
+  isSyncing,
   messageCount,
   onRefresh,
   syncError,
@@ -29,8 +29,13 @@ export function Toolbar({
       </div>
       <div className="toolbar-actions">
         <span className="message-count">{messageCount} messages</span>
-        <button className="primary-button" disabled={isLoading} onClick={onRefresh} type="button">
-          {isLoading ? "Syncing" : "Sync now"}
+        <button
+          className="primary-button"
+          disabled={isSyncing || !account}
+          onClick={onRefresh}
+          type="button"
+        >
+          {isSyncing ? "Syncing" : "Sync now"}
         </button>
       </div>
     </header>
