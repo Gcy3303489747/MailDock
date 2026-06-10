@@ -1,16 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { MailDetail } from "./features/mail/components/MailDetail";
 import { MailList } from "./features/mail/components/MailList";
 import { Sidebar } from "./features/mail/components/Sidebar";
 import { Toolbar } from "./features/mail/components/Toolbar";
-import { loadAccounts, loadInboxMessages, syncSavedQqInbox } from "./features/mail/mailApi";
-import type { MailAccount, MailFolder, MailMessage } from "./features/mail/types";
-
-interface SyncOptions {
-  quietCredentialError?: boolean;
-}
-
-const AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+import { loadAccounts, loadInboxMessages, loadSyncState, syncAccountNow } from "./features/mail/mailApi";
+import type {
+  MailAccount,
+  MailFolder,
+  MailMessage,
+  MessagesChangedEvent,
+  SyncFailedEvent,
+  SyncFinishedEvent,
+  SyncStartedEvent,
+} from "./features/mail/types";
 
 export default function App() {
   const [accounts, setAccounts] = useState<MailAccount[]>([]);
@@ -23,7 +26,6 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
-  const isSyncingRef = useRef(false);
   const selectedAccountIdRef = useRef<number | null>(null);
 
   const selectedMessage = useMemo(
@@ -65,6 +67,7 @@ export default function App() {
 
       const nextMessages = await loadInboxMessages(nextAccountId, selectedFolder);
       applyMessages(nextAccountId, nextMessages);
+      await applySyncState(nextAccountId);
 
       return nextAccountId;
     } catch (unknownError) {
@@ -75,31 +78,34 @@ export default function App() {
     }
   }
 
-  async function syncMailbox(accountId: number | null, options: SyncOptions = {}) {
-    if (accountId === null || isSyncingRef.current) {
+  async function refreshMailbox(accountId: number | null) {
+    if (accountId === null) {
       return;
     }
 
-    isSyncingRef.current = true;
     setIsSyncing(true);
     setSyncError(null);
 
     try {
-      await syncSavedQqInbox({ accountId, limit: 50 });
-      const nextMessages = await loadInboxMessages(accountId, selectedFolder);
-      applyMessages(accountId, nextMessages);
-      setLastSyncedAt(new Date());
+      await syncAccountNow({ accountId });
     } catch (syncError) {
       const nextSyncError = messageFromUnknown(syncError, "Unable to sync inbox.");
-      console.info("Saved credential sync skipped; showing cached inbox instead.", syncError);
-
-      if (!options.quietCredentialError) {
-        setSyncError(nextSyncError);
-      }
+      setSyncError(nextSyncError);
+      console.info("Manual sync failed; showing cached inbox instead.", syncError);
     } finally {
-      isSyncingRef.current = false;
       setIsSyncing(false);
     }
+  }
+
+  async function applySyncState(accountId: number) {
+    const syncState = await loadSyncState(accountId, selectedFolder);
+    if (selectedAccountIdRef.current !== accountId) {
+      return;
+    }
+
+    setIsSyncing(syncState.isSyncing);
+    setSyncError(syncState.lastError);
+    setLastSyncedAt(syncState.lastSuccessAt ? new Date(syncState.lastSuccessAt) : null);
   }
 
   function applyMessages(accountId: number, nextMessages: MailMessage[]) {
@@ -119,18 +125,79 @@ export default function App() {
   }
 
   useEffect(() => {
-    void (async () => {
-      const accountId = await loadCachedMailbox();
-      void syncMailbox(accountId, { quietCredentialError: true });
-    })();
+    void loadCachedMailbox();
   }, []);
 
   useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      void syncMailbox(selectedAccountIdRef.current);
-    }, AUTO_SYNC_INTERVAL_MS);
+    const unlistenCallbacks: Array<() => void> = [];
+    let isMounted = true;
 
-    return () => window.clearInterval(intervalId);
+    void listen<SyncStartedEvent>("maildock:sync-started", (event) => {
+      if (selectedAccountIdRef.current !== event.payload.accountId) {
+        return;
+      }
+
+      setIsSyncing(true);
+      setSyncError(null);
+    }).then((unlisten) => {
+      if (isMounted) {
+        unlistenCallbacks.push(unlisten);
+      } else {
+        unlisten();
+      }
+    });
+
+    void listen<SyncFinishedEvent>("maildock:sync-finished", (event) => {
+      if (selectedAccountIdRef.current !== event.payload.accountId) {
+        return;
+      }
+
+      setIsSyncing(false);
+      setSyncError(null);
+      setLastSyncedAt(new Date(event.payload.lastSuccessAt));
+    }).then((unlisten) => {
+      if (isMounted) {
+        unlistenCallbacks.push(unlisten);
+      } else {
+        unlisten();
+      }
+    });
+
+    void listen<SyncFailedEvent>("maildock:sync-failed", (event) => {
+      if (selectedAccountIdRef.current !== event.payload.accountId) {
+        return;
+      }
+
+      setIsSyncing(false);
+      setSyncError(event.payload.message);
+    }).then((unlisten) => {
+      if (isMounted) {
+        unlistenCallbacks.push(unlisten);
+      } else {
+        unlisten();
+      }
+    });
+
+    void listen<MessagesChangedEvent>("maildock:messages-changed", (event) => {
+      if (selectedAccountIdRef.current !== event.payload.accountId) {
+        return;
+      }
+
+      void loadInboxMessages(event.payload.accountId, event.payload.folder).then((nextMessages) =>
+        applyMessages(event.payload.accountId, nextMessages),
+      );
+    }).then((unlisten) => {
+      if (isMounted) {
+        unlistenCallbacks.push(unlisten);
+      } else {
+        unlisten();
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      unlistenCallbacks.forEach((unlisten) => unlisten());
+    };
   }, []);
 
   return (
@@ -143,7 +210,7 @@ export default function App() {
           setSelectedAccountId(accountId);
           void (async () => {
             const nextAccountId = await loadCachedMailbox(accountId);
-            void syncMailbox(nextAccountId);
+            void refreshMailbox(nextAccountId);
           })();
         }}
         onSyncComplete={(accountId) => {
@@ -160,7 +227,7 @@ export default function App() {
           lastSyncedAt={lastSyncedAt}
           isSyncing={isSyncing}
           messageCount={messages.length}
-          onRefresh={() => void syncMailbox(selectedAccountIdRef.current)}
+          onRefresh={() => void refreshMailbox(selectedAccountIdRef.current)}
           syncError={syncError}
         />
         <div className="mail-columns">

@@ -1,6 +1,5 @@
 use crate::mail_text::normalize_display_text;
 use crate::models::MailMessage;
-use mailparse::dateparse;
 use rusqlite::{params, Connection};
 
 pub(crate) fn list_messages(
@@ -12,7 +11,9 @@ pub(crate) fn list_messages(
         .prepare(
             "SELECT id, from_address, subject, received_at, preview, body, has_attachments, is_unread
              FROM messages
-             WHERE account_id = ?1 AND folder = ?2",
+             WHERE account_id = ?1 AND folder = ?2
+             ORDER BY received_at_epoch DESC, received_at DESC
+             LIMIT 100",
         )
         .map_err(|error| format!("Failed to prepare message query: {error}"))?;
 
@@ -31,18 +32,8 @@ pub(crate) fn list_messages(
         })
         .map_err(|error| format!("Failed to read messages: {error}"))?;
 
-    let mut messages = rows
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| format!("Failed to map messages: {error}"))?;
-
-    messages.sort_by(|left, right| {
-        received_at_sort_key(&right.received_at)
-            .cmp(&received_at_sort_key(&left.received_at))
-            .then_with(|| right.id.cmp(&left.id))
-    });
-    messages.truncate(100);
-
-    Ok(messages)
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("Failed to map messages: {error}"))
 }
 
 pub(crate) fn upsert_messages(
@@ -52,7 +43,6 @@ pub(crate) fn upsert_messages(
     messages: &[MailMessage],
 ) -> Result<usize, String> {
     let mut stored_count = 0;
-    let mut last_uid: Option<String> = None;
 
     for message in messages {
         connection
@@ -61,19 +51,25 @@ pub(crate) fn upsert_messages(
                     id,
                     account_id,
                     folder,
+                    provider_message_id,
+                    uid,
                     from_address,
                     subject,
                     received_at,
+                    received_at_epoch,
                     preview,
                     body,
                     has_attachments,
                     is_unread
                  )
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
                  ON CONFLICT(id) DO UPDATE SET
+                    provider_message_id = excluded.provider_message_id,
+                    uid = excluded.uid,
                     from_address = excluded.from_address,
                     subject = excluded.subject,
                     received_at = excluded.received_at,
+                    received_at_epoch = excluded.received_at_epoch,
                     preview = excluded.preview,
                     body = excluded.body,
                     has_attachments = excluded.has_attachments,
@@ -82,9 +78,12 @@ pub(crate) fn upsert_messages(
                     message.id,
                     account_id,
                     folder,
+                    message.id,
+                    message_uid(&message.id),
                     message.from,
                     message.subject,
                     message.received_at,
+                    crate::time_utils::received_at_sort_key(&message.received_at),
                     message.preview,
                     message.body,
                     message.has_attachments as i64,
@@ -94,78 +93,21 @@ pub(crate) fn upsert_messages(
             .map_err(|error| format!("Failed to save message {}: {error}", message.id))?;
 
         stored_count += 1;
-        last_uid = message.id.rsplit(':').next().map(str::to_owned);
     }
-
-    connection
-        .execute(
-            "INSERT INTO sync_state(account_id, folder, last_synced_at, last_uid)
-             VALUES (?1, ?2, CURRENT_TIMESTAMP, ?3)
-             ON CONFLICT(account_id, folder) DO UPDATE SET
-                last_synced_at = excluded.last_synced_at,
-                last_uid = excluded.last_uid",
-            params![account_id, folder, last_uid],
-        )
-        .map_err(|error| format!("Failed to update sync state: {error}"))?;
 
     Ok(stored_count)
 }
 
-fn received_at_sort_key(value: &str) -> i64 {
-    dateparse(value)
-        .ok()
-        .or_else(|| parse_rfc3339_timestamp(value))
-        .unwrap_or(0)
+pub(crate) fn last_message_uid(messages: &[MailMessage]) -> Option<String> {
+    messages.last().map(|message| message_uid(&message.id))
 }
 
-fn parse_rfc3339_timestamp(value: &str) -> Option<i64> {
-    if value.len() < 20 {
-        return None;
-    }
-
-    let year = parse_i64(value, 0, 4)?;
-    let month = parse_i64(value, 5, 7)?;
-    let day = parse_i64(value, 8, 10)?;
-    let hour = parse_i64(value, 11, 13)?;
-    let minute = parse_i64(value, 14, 16)?;
-    let second = parse_i64(value, 17, 19)?;
-
-    let timezone_start = value[19..]
-        .find(|character| matches!(character, 'Z' | '+' | '-'))
-        .map(|index| index + 19)?;
-    let timezone = &value[timezone_start..];
-    let offset_seconds = if timezone == "Z" {
-        0
-    } else {
-        let sign = match timezone.as_bytes().first().copied()? {
-            b'+' => 1,
-            b'-' => -1,
-            _ => return None,
-        };
-        let offset_hour = parse_i64(timezone, 1, 3)?;
-        let offset_minute = parse_i64(timezone, 4, 6)?;
-        sign * (offset_hour * 3600 + offset_minute * 60)
-    };
-
-    Some(
-        days_from_civil(year, month, day) * 86_400 + hour * 3600 + minute * 60 + second
-            - offset_seconds,
-    )
-}
-
-fn parse_i64(value: &str, start: usize, end: usize) -> Option<i64> {
-    value.get(start..end)?.parse().ok()
-}
-
-fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
-    let year = year - i64::from(month <= 2);
-    let era = if year >= 0 { year } else { year - 399 } / 400;
-    let year_of_era = year - era * 400;
-    let month_prime = month + if month > 2 { -3 } else { 9 };
-    let day_of_year = (153 * month_prime + 2) / 5 + day - 1;
-    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
-
-    era * 146_097 + day_of_era - 719_468
+fn message_uid(message_id: &str) -> String {
+    message_id
+        .rsplit(':')
+        .next()
+        .unwrap_or(message_id)
+        .to_owned()
 }
 
 #[cfg(test)]
@@ -289,8 +231,8 @@ mod tests {
     #[test]
     fn sorts_cached_rfc2822_dates_with_rfc3339_dates() {
         assert!(
-            received_at_sort_key("Fri, 29 May 2026 09:30:00 +0800")
-                > received_at_sort_key("2026-05-29T08:00:00+08:00")
+            crate::time_utils::received_at_sort_key("Fri, 29 May 2026 09:30:00 +0800")
+                > crate::time_utils::received_at_sort_key("2026-05-29T08:00:00+08:00")
         );
     }
 

@@ -61,3 +61,14 @@ pub struct MailMessage {
     pub has_attachments: bool,
     pub is_unread: bool,
 }
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncState {
+    pub account_id: i64,
+    pub folder: String,
+    pub last_attempt_at: Option<String>,
+    pub last_success_at: Option<String>,
+    pub last_error: Option<String>,
+    pub is_syncing: bool,
+}

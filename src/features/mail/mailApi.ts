@@ -7,6 +7,7 @@ import type {
   QqInboxSyncInput,
   QqInboxSyncReport,
   SavedQqInboxSyncInput,
+  SyncState,
 } from "./types";
 
 export async function loadAccounts(): Promise<MailAccount[]> {
@@ -53,6 +54,29 @@ export async function syncSavedQqInbox(
       stored: mockMessages.length,
       totalInboxMessages: mockMessages.length,
       credentialSaved: false,
+    };
+  }
+}
+
+export async function syncAccountNow(input: SavedQqInboxSyncInput): Promise<QqInboxSyncReport> {
+  return await invoke<QqInboxSyncReport>("sync_account_now", { input });
+}
+
+export async function loadSyncState(
+  accountId: number,
+  folder: MailFolder = "INBOX",
+): Promise<SyncState> {
+  try {
+    return await invoke<SyncState>("get_sync_state", { accountId, folder });
+  } catch (error) {
+    console.info("Using browser mock sync state until the Tauri backend is available.", error);
+    return {
+      accountId,
+      folder,
+      lastAttemptAt: null,
+      lastSuccessAt: null,
+      lastError: null,
+      isSyncing: false,
     };
   }
 }

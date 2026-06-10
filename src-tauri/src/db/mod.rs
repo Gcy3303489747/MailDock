@@ -2,8 +2,9 @@ mod account_repo;
 pub(crate) mod connection;
 mod message_repo;
 pub(crate) mod seed;
+mod sync_state_repo;
 
-use crate::models::{MailAccount, MailMessage};
+use crate::models::{MailAccount, MailMessage, SyncState};
 use tauri::AppHandle;
 
 pub fn get_account(app: &AppHandle, account_id: i64) -> Result<MailAccount, String> {
@@ -38,6 +39,40 @@ pub fn upsert_messages(
 ) -> Result<usize, String> {
     let connection = initialized_database(app)?;
     message_repo::upsert_messages(&connection, account_id, folder, messages)
+}
+
+pub fn last_message_uid(messages: &[MailMessage]) -> Option<String> {
+    message_repo::last_message_uid(messages)
+}
+
+pub fn get_sync_state(app: &AppHandle, account_id: i64, folder: &str) -> Result<SyncState, String> {
+    let connection = initialized_database(app)?;
+    sync_state_repo::get_sync_state(&connection, account_id, folder)
+}
+
+pub fn mark_sync_started(app: &AppHandle, account_id: i64, folder: &str) -> Result<String, String> {
+    let connection = initialized_database(app)?;
+    sync_state_repo::mark_sync_started(&connection, account_id, folder)
+}
+
+pub fn mark_sync_finished(
+    app: &AppHandle,
+    account_id: i64,
+    folder: &str,
+    last_uid: Option<&str>,
+) -> Result<String, String> {
+    let connection = initialized_database(app)?;
+    sync_state_repo::mark_sync_finished(&connection, account_id, folder, last_uid)
+}
+
+pub fn mark_sync_failed(
+    app: &AppHandle,
+    account_id: i64,
+    folder: &str,
+    message: &str,
+) -> Result<String, String> {
+    let connection = initialized_database(app)?;
+    sync_state_repo::mark_sync_failed(&connection, account_id, folder, message)
 }
 
 fn initialized_database(app: &AppHandle) -> Result<rusqlite::Connection, String> {

@@ -41,7 +41,6 @@ export interface QqInboxSyncInput {
 
 export interface SavedQqInboxSyncInput {
   accountId: number;
-  limit?: number;
 }
 
 export interface QqInboxSyncReport {
@@ -52,4 +51,37 @@ export interface QqInboxSyncReport {
   stored: number;
   totalInboxMessages: number;
   credentialSaved: boolean;
+}
+
+export interface SyncState {
+  accountId: number;
+  folder: MailFolder;
+  lastAttemptAt: string | null;
+  lastSuccessAt: string | null;
+  lastError: string | null;
+  isSyncing: boolean;
+}
+
+export interface SyncStartedEvent {
+  accountId: number;
+  folder: MailFolder;
+}
+
+export interface SyncFinishedEvent {
+  accountId: number;
+  folder: MailFolder;
+  stored: number;
+  lastSuccessAt: string;
+}
+
+export interface SyncFailedEvent {
+  accountId: number;
+  folder: MailFolder;
+  message: string;
+  lastAttemptAt: string;
+}
+
+export interface MessagesChangedEvent {
+  accountId: number;
+  folder: MailFolder;
 }

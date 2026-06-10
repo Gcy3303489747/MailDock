@@ -1,3 +1,8 @@
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version INTEGER PRIMARY KEY,
+    applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS accounts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     provider TEXT NOT NULL,
@@ -14,9 +19,12 @@ CREATE TABLE IF NOT EXISTS messages (
     id TEXT PRIMARY KEY,
     account_id INTEGER NOT NULL,
     folder TEXT NOT NULL,
+    provider_message_id TEXT NOT NULL DEFAULT '',
+    uid TEXT NOT NULL DEFAULT '',
     from_address TEXT NOT NULL,
     subject TEXT NOT NULL,
     received_at TEXT NOT NULL,
+    received_at_epoch INTEGER NOT NULL DEFAULT 0,
     preview TEXT NOT NULL,
     body TEXT NOT NULL,
     has_attachments INTEGER NOT NULL DEFAULT 0,
@@ -25,13 +33,14 @@ CREATE TABLE IF NOT EXISTS messages (
     FOREIGN KEY (account_id) REFERENCES accounts(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_messages_account_folder_received
-ON messages(account_id, folder, received_at DESC);
-
 CREATE TABLE IF NOT EXISTS sync_state (
     account_id INTEGER NOT NULL,
     folder TEXT NOT NULL,
     last_synced_at TEXT,
+    last_attempt_at TEXT,
+    last_success_at TEXT,
+    last_error TEXT,
+    is_syncing INTEGER NOT NULL DEFAULT 0,
     last_uid TEXT,
     PRIMARY KEY (account_id, folder),
     FOREIGN KEY (account_id) REFERENCES accounts(id)

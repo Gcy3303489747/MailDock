@@ -1,11 +1,18 @@
 use crate::models::ProviderKind;
+use base64::prelude::*;
 use keyring::{Entry, Error};
 use std::fs;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
+use windows::core::w;
+use windows::Win32::Foundation::{LocalFree, HLOCAL};
+use windows::Win32::Security::Cryptography::{
+    CryptProtectData, CryptUnprotectData, CRYPT_INTEGER_BLOB,
+};
 
 const SERVICE_NAME: &str = "MailDock";
-const LOCAL_CREDENTIAL_HEADER: &str = "maildock-local-credential-v1";
+const LOCAL_CREDENTIAL_HEADER: &str = "maildock-local-credential-dpapi-v1";
+const LEGACY_LOCAL_CREDENTIAL_HEADER: &str = "maildock-local-credential-v1";
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
@@ -170,23 +177,87 @@ fn safe_key_name(key: &CredentialKey) -> String {
 }
 
 fn read_local_secret(path: PathBuf) -> Result<Option<String>, String> {
-    let value = match fs::read_to_string(path) {
+    let value = match fs::read_to_string(&path) {
         Ok(value) => value,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(format!("Failed to read local mailbox credential: {error}")),
     };
 
     let mut lines = value.lines();
-    if lines.next() != Some(LOCAL_CREDENTIAL_HEADER) {
-        return Err("Local mailbox credential file is not a MailDock credential.".into());
+    match lines.next() {
+        Some(LOCAL_CREDENTIAL_HEADER) => {
+            let encoded = lines.collect::<Vec<_>>().join("");
+            let encrypted = BASE64_STANDARD
+                .decode(encoded)
+                .map_err(|error| format!("Failed to decode local mailbox credential: {error}"))?;
+            decrypt_with_dpapi(&encrypted).map(Some)
+        }
+        Some(LEGACY_LOCAL_CREDENTIAL_HEADER) => {
+            let secret = lines.collect::<Vec<_>>().join("\n");
+            write_local_secret(path.clone(), &secret)?;
+            Ok(Some(secret))
+        }
+        _ => Err("Local mailbox credential file is not a MailDock credential.".into()),
     }
-
-    Ok(Some(lines.collect::<Vec<_>>().join("\n")))
 }
 
 fn write_local_secret(path: PathBuf, secret: &str) -> Result<(), String> {
-    fs::write(path, format!("{LOCAL_CREDENTIAL_HEADER}\n{secret}"))
+    let encrypted = encrypt_with_dpapi(secret.as_bytes())?;
+    let encoded = BASE64_STANDARD.encode(encrypted);
+    fs::write(path, format!("{LOCAL_CREDENTIAL_HEADER}\n{encoded}"))
         .map_err(|error| format!("Failed to save local mailbox credential: {error}"))
+}
+
+fn encrypt_with_dpapi(value: &[u8]) -> Result<Vec<u8>, String> {
+    let mut input = CRYPT_INTEGER_BLOB {
+        cbData: value.len() as u32,
+        pbData: value.as_ptr() as *mut u8,
+    };
+    let mut output = CRYPT_INTEGER_BLOB::default();
+
+    unsafe {
+        CryptProtectData(
+            &mut input,
+            w!("MailDock mailbox credential"),
+            None,
+            None,
+            None,
+            0,
+            &mut output,
+        )
+        .map_err(|error| format!("Failed to encrypt local mailbox credential: {error}"))?;
+    }
+
+    blob_to_vec_and_free(output)
+}
+
+fn decrypt_with_dpapi(value: &[u8]) -> Result<String, String> {
+    let mut input = CRYPT_INTEGER_BLOB {
+        cbData: value.len() as u32,
+        pbData: value.as_ptr() as *mut u8,
+    };
+    let mut output = CRYPT_INTEGER_BLOB::default();
+
+    unsafe {
+        CryptUnprotectData(&mut input, None, None, None, None, 0, &mut output)
+            .map_err(|error| format!("Failed to decrypt local mailbox credential: {error}"))?;
+    }
+
+    let decrypted = blob_to_vec_and_free(output)?;
+    String::from_utf8(decrypted)
+        .map_err(|error| format!("Local mailbox credential is not valid UTF-8: {error}"))
+}
+
+fn blob_to_vec_and_free(blob: CRYPT_INTEGER_BLOB) -> Result<Vec<u8>, String> {
+    if blob.pbData.is_null() {
+        return Err("Local mailbox credential file is not a MailDock credential.".into());
+    }
+
+    let bytes = unsafe { std::slice::from_raw_parts(blob.pbData, blob.cbData as usize).to_vec() };
+    unsafe {
+        let _ = LocalFree(Some(HLOCAL(blob.pbData.cast())));
+    }
+    Ok(bytes)
 }
 
 #[cfg(test)]
@@ -212,5 +283,39 @@ mod tests {
         let key = CredentialKey::for_mailbox(ProviderKind::Qq, "Student@qq.com");
 
         assert_eq!(safe_key_name(&key), "qq_student_qq_com");
+    }
+
+    #[test]
+    fn encrypts_and_decrypts_local_secret_with_dpapi() {
+        let encrypted = encrypt_with_dpapi(b"qq-secret").expect("encrypt secret");
+
+        assert_ne!(encrypted, b"qq-secret");
+        assert_eq!(
+            decrypt_with_dpapi(&encrypted).expect("decrypt secret"),
+            "qq-secret"
+        );
+    }
+
+    #[test]
+    fn migrates_legacy_plaintext_local_secret() {
+        let path = std::env::temp_dir().join(format!(
+            "maildock-legacy-credential-{}.credential",
+            std::process::id()
+        ));
+        fs::write(
+            &path,
+            format!("{LEGACY_LOCAL_CREDENTIAL_HEADER}\nlegacy-secret"),
+        )
+        .expect("write legacy credential");
+
+        let secret = read_local_secret(path.clone())
+            .expect("read local secret")
+            .expect("secret exists");
+        let migrated = fs::read_to_string(&path).expect("read migrated credential");
+        let _ = fs::remove_file(&path);
+
+        assert_eq!(secret, "legacy-secret");
+        assert!(migrated.starts_with(LOCAL_CREDENTIAL_HEADER));
+        assert!(!migrated.contains("legacy-secret"));
     }
 }
