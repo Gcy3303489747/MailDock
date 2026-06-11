@@ -47,8 +47,8 @@ export function Sidebar({
               >
                 <span className="menu-option-mark">+</span>
                 <span>
-                  <strong>Import mailbox</strong>
-                  <small>Connect QQ Mail inbox</small>
+                  <strong>Add mailbox</strong>
+                  <small>QQ Mail inbox</small>
                 </span>
               </button>
             </div>
@@ -62,7 +62,9 @@ export function Sidebar({
 
       <nav className="account-list" aria-label="Configured mailboxes">
         {accounts.length === 0 ? (
-          <p className="empty-account-copy">Import a mailbox to begin.</p>
+          <p className="empty-account-copy">
+            Add your QQ mailbox to start syncing inbox messages.
+          </p>
         ) : (
           accounts.map((account) => (
             <button
@@ -74,9 +76,12 @@ export function Sidebar({
               type="button"
             >
               <span className="account-avatar">{providerInitial(account.provider)}</span>
-              <span>
-                <strong>{account.displayName}</strong>
-                <small>{account.address}</small>
+              <span className="account-meta">
+                <span className="account-heading">
+                  <strong>{account.displayName}</strong>
+                  <span className="account-provider">{providerLabel(account.provider)}</span>
+                </span>
+                <small title={account.address}>{account.address}</small>
               </span>
             </button>
           ))
@@ -92,11 +97,21 @@ export function Sidebar({
           }}
         />
       )}
-
     </aside>
   );
 }
 
 function providerInitial(provider: MailAccount["provider"]): string {
   return provider.slice(0, 1).toUpperCase();
+}
+
+function providerLabel(provider: MailAccount["provider"]): string {
+  switch (provider) {
+    case "qq":
+      return "QQ";
+    case "fudan":
+      return "Fudan";
+    case "gmail":
+      return "Gmail";
+  }
 }

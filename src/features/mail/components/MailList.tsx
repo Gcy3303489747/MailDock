@@ -20,8 +20,8 @@ export function MailList({
   if (isLoading) {
     return (
       <section className="mail-list state-panel" aria-label="Loading messages">
-        <p className="state-title">Loading inbox</p>
-        <p className="state-copy">Checking local cached mail.</p>
+        <p className="state-title">Loading local inbox</p>
+        <p className="state-copy">Reading cached messages from this device.</p>
       </section>
     );
   }
@@ -42,7 +42,7 @@ export function MailList({
     return (
       <section className="mail-list state-panel" aria-label="Empty inbox">
         <p className="state-title">No messages yet</p>
-        <p className="state-copy">Import a QQ mailbox from the menu to sync recent mail.</p>
+        <p className="state-copy">MailDock will show synced inbox messages here.</p>
       </section>
     );
   }
@@ -60,12 +60,12 @@ export function MailList({
             type="button"
           >
             <span className="message-row-topline">
-              <strong>{message.from}</strong>
+              <strong title={message.from}>{message.from}</strong>
               <time dateTime={message.receivedAt}>{formatDate(message.receivedAt)}</time>
             </span>
-            <span className="message-subject">
+            <span className="message-subject" title={message.subject}>
               {message.isUnread && <span className="unread-dot" aria-label="Unread" />}
-              {message.subject}
+              <span>{message.subject}</span>
               {message.hasAttachments && <span className="attachment-pill">Attachment</span>}
             </span>
             <span className="message-preview">{message.preview}</span>

@@ -21,27 +21,24 @@ export function Toolbar({
 }: ToolbarProps) {
   return (
     <header className="toolbar">
-      <div>
+      <div className="toolbar-main">
         <p className="eyebrow">
           {account ? `${providerLabel(account.provider)} / ${folder}` : `No mailbox / ${folder}`}
         </p>
         <h2>Inbox</h2>
         {account && <p className="toolbar-account">{account.address}</p>}
         {account && (
-          <p className="toolbar-sync-status">
-            {isSyncing
-              ? "Auto syncing..."
-              : lastSyncedAt
-                ? `Auto sync on. Last synced ${formatTime(lastSyncedAt)}.`
-                : "Auto sync on. Waiting for first background sync."}
+          <p className={`toolbar-sync-status ${syncError ? "toolbar-sync-status-error" : ""}`}>
+            {syncError
+              ? `Sync failed: ${syncError}`
+              : syncStatusText(isSyncing, lastSyncedAt)}
           </p>
         )}
-        {syncError && <p className="toolbar-sync-error">{syncError}</p>}
       </div>
       <div className="toolbar-actions">
-        <span className="message-count">{messageCount} messages</span>
+        <span className="message-count">{messageCountLabel(messageCount)}</span>
         <button
-          className="primary-button"
+          className="secondary-button toolbar-refresh"
           disabled={isSyncing || !account}
           onClick={onRefresh}
           type="button"
@@ -51,6 +48,22 @@ export function Toolbar({
       </div>
     </header>
   );
+}
+
+function syncStatusText(isSyncing: boolean, lastSyncedAt: Date | null): string {
+  if (isSyncing) {
+    return "Syncing in background";
+  }
+
+  if (lastSyncedAt) {
+    return `Last synced ${formatTime(lastSyncedAt)}`;
+  }
+
+  return "Waiting for first sync";
+}
+
+function messageCountLabel(count: number): string {
+  return `${count} ${count === 1 ? "message" : "messages"}`;
 }
 
 function formatTime(value: Date): string {

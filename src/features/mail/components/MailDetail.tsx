@@ -15,8 +15,8 @@ export function MailDetail({ message }: MailDetailProps) {
   if (!message) {
     return (
       <article className="mail-detail empty-detail" aria-label="No message selected">
-        <p className="state-title">No message selected</p>
-        <p className="state-copy">Choose a message from the inbox list.</p>
+        <p className="state-title">Select a message</p>
+        <p className="state-copy">Choose an email from the inbox list to read it here.</p>
       </article>
     );
   }
@@ -28,8 +28,14 @@ export function MailDetail({ message }: MailDetailProps) {
       <header className="detail-header">
         <h2>{message.subject}</h2>
         <div className="detail-meta">
-          <span>{message.from}</span>
-          <time dateTime={message.receivedAt}>{formatFullDate(message.receivedAt)}</time>
+          <span>
+            <strong>From</strong>
+            {message.from}
+          </span>
+          <time dateTime={message.receivedAt}>
+            <strong>Received</strong>
+            {formatFullDate(message.receivedAt)}
+          </time>
         </div>
       </header>
       <div className="detail-body">

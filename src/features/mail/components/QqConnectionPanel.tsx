@@ -42,12 +42,12 @@ export function QqConnectionPanel({ onClose, onSyncComplete }: QqConnectionPanel
     <form className="connection-panel" onSubmit={handleSubmit}>
       <div>
         <div className="connection-panel-header">
-          <strong>QQ IMAP</strong>
+          <strong>Add QQ Mail</strong>
           <button aria-label="Close import panel" onClick={onClose} type="button">
             Close
           </button>
         </div>
-        <span>Import saves the code in your system credential store for future sync.</span>
+        <span>Use your QQ Mail authorization code to sync the inbox in read-only mode.</span>
       </div>
 
       <label>
@@ -74,14 +74,13 @@ export function QqConnectionPanel({ onClose, onSyncComplete }: QqConnectionPanel
 
       <div className="connection-actions">
         <button className="primary-button" disabled={isBusy} type="submit">
-          {isBusy ? "Importing" : "Import inbox"}
+          {isBusy ? "Connecting" : "Add mailbox"}
         </button>
       </div>
 
       {syncReport && (
         <p className="connection-result">
-          Synced {syncReport.stored} messages from {syncReport.address}.
-          {syncReport.credentialSaved ? " Future sync is enabled." : ""}
+          Mailbox added. Background sync is enabled.
         </p>
       )}
       {error && <p className="connection-error">{error}</p>}
